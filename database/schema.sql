@@ -13,9 +13,7 @@ DROP TABLE IF EXISTS `admins`;
 CREATE TABLE `admins` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `username` VARCHAR(50) NOT NULL UNIQUE,
-    `email` VARCHAR(100) NOT NULL UNIQUE,
     `password` VARCHAR(255) NOT NULL,
-    `name` VARCHAR(100) NOT NULL,
     `last_login` DATETIME DEFAULT NULL,
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -38,9 +36,7 @@ CREATE TABLE `members` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `first_name` VARCHAR(50) NOT NULL,
     `last_name` VARCHAR(50) NOT NULL,
-    `email` VARCHAR(100) DEFAULT NULL,
     `phone` VARCHAR(20) DEFAULT NULL,
-    `address` TEXT DEFAULT NULL,
     `gender` ENUM('male', 'female', 'other') DEFAULT 'other',
     `date_of_birth` DATE DEFAULT NULL,
     `photo` VARCHAR(255) DEFAULT NULL,
@@ -116,7 +112,33 @@ CREATE TABLE `import_logs` (
     CONSTRAINT `fk_import_admin` FOREIGN KEY (`imported_by`) REFERENCES `admins` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 8. Activity Logs / Audit Trail Table
+-- 8. Branch Analytics Snapshots
+DROP TABLE IF EXISTS `branch_analytics_snapshots`;
+DROP TABLE IF EXISTS `branch_analytics_settings`;
+CREATE TABLE `branch_analytics_settings` (
+    `id` TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    `branch_name` VARCHAR(40) NOT NULL DEFAULT '707_GYM_MAIN'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO `branch_analytics_settings` (`id`, `branch_name`) VALUES (1, '707_GYM_MAIN');
+
+CREATE TABLE `branch_analytics_snapshots` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `branch_name` VARCHAR(40) NOT NULL,
+    `period_month` CHAR(7) NOT NULL,
+    `captured_at` DATETIME NOT NULL,
+    `revenue` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    `new_members` INT UNSIGNED NOT NULL DEFAULT 0,
+    `active_members` INT UNSIGNED NOT NULL DEFAULT 0,
+    `attendance_visits` INT UNSIGNED NOT NULL DEFAULT 0,
+    `active_memberships` INT UNSIGNED NOT NULL DEFAULT 0,
+    `source_file` VARCHAR(255) NOT NULL,
+    `imported_by` INT DEFAULT NULL,
+    `imported_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_branch_analytics_branch_month` (`branch_name`, `period_month`),
+    CONSTRAINT `fk_branch_analytics_admin` FOREIGN KEY (`imported_by`) REFERENCES `admins` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 9. Activity Logs / Audit Trail Table
 DROP TABLE IF EXISTS `activity_logs`;
 CREATE TABLE `activity_logs` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,

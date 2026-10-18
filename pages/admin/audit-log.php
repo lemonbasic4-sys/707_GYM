@@ -20,31 +20,32 @@ $where = ["1=1"];
 $params = [];
 
 if ($search !== '') {
-    $where[] = "(al.action LIKE :action OR al.details LIKE :details OR a.name LIKE :admin_name)";
+    $where[] = "(al.action LIKE :action OR al.details LIKE :details OR :display_name LIKE :admin_name)";
     $searchTerm = "%$search%";
     $params[':action'] = $searchTerm;
     $params[':details'] = $searchTerm;
     $params[':admin_name'] = $searchTerm;
+    $params[':display_name'] = ADMIN_DISPLAY_NAME;
 }
 
 $whereClause = implode(' AND ', $where);
 
 // Total items
-$cntStmt = $pdo->prepare("SELECT COUNT(*) FROM activity_logs al LEFT JOIN admins a ON al.admin_id = a.id WHERE $whereClause");
+$cntStmt = $pdo->prepare("SELECT COUNT(*) FROM activity_logs al WHERE $whereClause");
 $cntStmt->execute($params);
 $totalLogs = $cntStmt->fetchColumn();
 
 $pagination = getPaginationData($totalLogs, $page, 25);
 
 // Fetch logs
-$sql = "SELECT al.*, a.name as admin_name 
-        FROM activity_logs al 
-        LEFT JOIN admins a ON al.admin_id = a.id 
+$sql = "SELECT al.*, :display_name AS admin_name
+        FROM activity_logs al
         WHERE $whereClause 
         ORDER BY al.created_at DESC 
         LIMIT :limit OFFSET :offset";
 
 $stmt = $pdo->prepare($sql);
+$stmt->bindValue(':display_name', ADMIN_DISPLAY_NAME);
 foreach ($params as $k => $v) {
     $stmt->bindValue($k, $v);
 }

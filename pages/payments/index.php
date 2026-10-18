@@ -48,13 +48,11 @@ $totalAmount = (float)$sumStmt->fetchColumn();
 $stmt = $db->prepare(
     "SELECT p.id, p.transaction_id, p.transaction_type, p.amount, p.payment_method, p.payment_date, p.status, p.notes,
             m.first_name, m.last_name,
-            pl.name AS plan_name,
-            a.name AS recorded_by_name
+            pl.name AS plan_name
      FROM payments p
      JOIN members m ON p.member_id = m.id
      LEFT JOIN memberships ms ON p.membership_id = ms.id
      LEFT JOIN membership_plans pl ON ms.plan_id = pl.id
-     LEFT JOIN admins a ON p.recorded_by = a.id
      WHERE {$whereSQL}
      ORDER BY p.created_at DESC
      LIMIT :limit OFFSET :offset"
@@ -83,7 +81,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     </div>
 </div>
 
-<form method="GET" class="filter-bar">
+<form method="GET" class="filter-bar payments-filter-bar">
     <input type="search" name="search" placeholder="Search member, txn..." value="<?= sanitize($search) ?>">
     <select name="method">
         <option value="">All Methods</option>
@@ -98,8 +96,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <option value="partial" <?= $status==='partial'?'selected':'' ?>>Partial</option>
         <option value="unpaid"  <?= $status==='unpaid'?'selected':'' ?>>Unpaid</option>
     </select>
-    <input type="date" name="date_from" value="<?= sanitize($dateFrom) ?>">
-    <input type="date" name="date_to"   value="<?= sanitize($dateTo) ?>">
+    <div class="payments-date-range">
+        <label>From<input type="date" name="date_from" value="<?= sanitize($dateFrom) ?>"></label>
+        <label>To<input type="date" name="date_to" value="<?= sanitize($dateTo) ?>"></label>
+    </div>
     <button type="submit" class="btn btn-secondary">Filter</button>
     <a href="<?= BASE_URL ?>/pages/payments/index.php" class="btn btn-ghost">Clear</a>
 </form>
@@ -109,7 +109,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <div class="empty-state"><i data-lucide="dollar-sign"></i><h3>No payments found</h3></div>
     <?php else: ?>
     <div class="table-wrapper">
-        <table>
+        <table class="payments-table">
             <thead>
                 <tr><th>Txn ID</th><th>Type</th><th>Member</th><th>Plan</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th><th>Actions</th></tr>
             </thead>

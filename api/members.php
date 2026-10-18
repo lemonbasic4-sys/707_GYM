@@ -24,20 +24,18 @@ switch ($action) {
             echo json_encode(['success' => true, 'data' => []]);
             exit;
         }
-        $stmt = $pdo->prepare("SELECT id, first_name, last_name, phone, email
+        $stmt = $pdo->prepare("SELECT id, first_name, last_name, phone
                                FROM members
                                WHERE status = 'active' AND (
                                    first_name LIKE :first_name OR
                                    last_name LIKE :last_name OR
-                                   phone LIKE :phone OR
-                                   email LIKE :email
+                                   phone LIKE :phone
                                ) LIMIT 10");
         $searchTerm = "%{$query}%";
         $stmt->execute([
             ':first_name' => $searchTerm,
             ':last_name' => $searchTerm,
             ':phone' => $searchTerm,
-            ':email' => $searchTerm,
         ]);
         $members = $stmt->fetchAll();
         echo json_encode(['success' => true, 'data' => $members]);

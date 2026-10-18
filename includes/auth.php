@@ -18,9 +18,9 @@ class Auth
     }
 
     /**
-     * Attempt to log in an admin by username or email.
+     * Attempt to log in an admin by username.
      *
-     * @param string $username  Username or email
+     * @param string $username  Username
      * @param string $password  Plain-text password
      * @return bool
      */
@@ -29,12 +29,12 @@ class Auth
         $username = trim($username);
 
         $stmt = $this->db->prepare(
-            "SELECT id, username, email, password, name
+            "SELECT id, username, password
                FROM admins
-              WHERE (username = :username OR email = :email)
+              WHERE username = :username
               LIMIT 1"
         );
-        $stmt->execute([':username' => $username, ':email' => $username]);
+        $stmt->execute([':username' => $username]);
         $admin = $stmt->fetch();
 
         if (!$admin || !password_verify($password, $admin['password'])) {
@@ -46,8 +46,7 @@ class Auth
 
         $_SESSION['logged_in']   = true;
         $_SESSION['admin_id']    = $admin['id'];
-        $_SESSION['admin_name']  = $admin['name'];
-        $_SESSION['admin_email'] = $admin['email'];
+        $_SESSION['admin_name']  = ADMIN_DISPLAY_NAME;
         $_SESSION['admin_username'] = $admin['username'];
 
         // Update last_login timestamp
@@ -128,11 +127,14 @@ class Auth
     public function getAdmin(int $adminId): ?array
     {
         $stmt = $this->db->prepare(
-            "SELECT id, username, email, name, last_login, created_at
+            "SELECT id, username, last_login, created_at
                FROM admins WHERE id = :id LIMIT 1"
         );
         $stmt->execute([':id' => $adminId]);
         $row = $stmt->fetch();
+        if ($row) {
+            $row['name'] = ADMIN_DISPLAY_NAME;
+        }
         return $row ?: null;
     }
 }

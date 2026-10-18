@@ -38,9 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $fields = [
             'first_name'              => trim($_POST['first_name']  ?? ''),
             'last_name'               => trim($_POST['last_name']   ?? ''),
-            'email'                   => trim($_POST['email']       ?? ''),
             'phone'                   => trim($_POST['phone']       ?? ''),
-            'address'                 => trim($_POST['address']     ?? ''),
             'gender'                  => $_POST['gender']           ?? '',
             'date_of_birth'           => $_POST['date_of_birth']    ?? '',
             'emergency_contact_name'  => trim($_POST['emergency_contact_name']  ?? ''),
@@ -77,9 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "UPDATE members SET
                     first_name = :first_name,
                     last_name  = :last_name,
-                    email      = :email,
                     phone      = :phone,
-                    address    = :address,
                     gender     = :gender,
                     date_of_birth = :dob,
                     photo      = :photo,
@@ -92,9 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $upd->execute([
                 ':first_name' => $fields['first_name'],
                 ':last_name'  => $fields['last_name'],
-                ':email'      => $fields['email']   ?: null,
                 ':phone'      => $fields['phone']   ?: null,
-                ':address'    => $fields['address'] ?: null,
                 ':gender'     => $fields['gender'],
                 ':dob'        => $fields['date_of_birth'] ?: null,
                 ':photo'      => $photoFilename,
@@ -160,13 +154,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
                 </div>
                 <div class="member-field">
-                    <span class="member-field-icon"><i data-lucide="mail"></i></span>
-                    <div class="member-field-content">
-                        <label>Email</label>
-                        <input type="email" name="email" value="<?= sanitize($member['email'] ?? '') ?>">
-                    </div>
-                </div>
-                <div class="member-field">
                     <span class="member-field-icon"><i data-lucide="phone"></i></span>
                     <div class="member-field-content">
                         <label>Phone</label>
@@ -190,20 +177,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <label>Date of Birth</label>
                         <input type="date" name="date_of_birth" value="<?= sanitize($member['date_of_birth'] ?? '') ?>">
                     </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="member-form-section">
-            <div class="member-form-section-header">
-                <span class="member-section-icon"><i data-lucide="map-pin"></i></span>
-                <div><h2>Address Information</h2><p>Complete address of the member.</p></div>
-            </div>
-            <div class="member-field">
-                <span class="member-field-icon"><i data-lucide="map-pin"></i></span>
-                <div class="member-field-content">
-                    <label>Address</label>
-                    <textarea name="address" rows="2"><?= sanitize($member['address'] ?? '') ?></textarea>
                 </div>
             </div>
         </section>

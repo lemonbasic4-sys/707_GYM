@@ -22,13 +22,11 @@ $stmt = $db->prepare(
     "SELECT p.*, 
             m.first_name, m.last_name,
             pl.name AS plan_name, pl.duration_days,
-            ms.start_date, ms.end_date,
-            a.name AS recorded_by_name
+            ms.start_date, ms.end_date
      FROM payments p
      JOIN members m ON p.member_id = m.id
      LEFT JOIN memberships ms ON p.membership_id = ms.id
      LEFT JOIN membership_plans pl ON ms.plan_id = pl.id
-     LEFT JOIN admins a ON p.recorded_by = a.id
      WHERE p.id = :id LIMIT 1"
 );
 $stmt->execute([':id' => $id]);
@@ -118,7 +116,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <!-- Details -->
         <div style="font-size:13px; color:var(--muted); text-align:center; padding-top:16px; border-top:1px solid var(--border);">
             <p>Payment Method: <strong style="color:var(--text);"><?= sanitize(strtoupper($payment['payment_method'])) ?></strong></p>
-            <p style="margin-top:4px;">Recorded by: <?= sanitize($payment['recorded_by_name'] ?? 'Admin') ?></p>
+            <p style="margin-top:4px;">Recorded by: <?= sanitize(ADMIN_DISPLAY_NAME) ?></p>
             <?php if ($payment['notes']): ?>
             <p style="margin-top:8px; font-style:italic;"><?= sanitize($payment['notes']) ?></p>
             <?php endif; ?>

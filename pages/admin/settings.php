@@ -17,7 +17,7 @@ $pageTitle = 'System Settings';
 $adminId = $_SESSION['admin_id'];
 
 // Fetch current admin
-$stmt = $pdo->prepare("SELECT id, username, email, name FROM admins WHERE id = :id");
+$stmt = $pdo->prepare("SELECT id, username FROM admins WHERE id = :id");
 $stmt->execute([':id' => $adminId]);
 $admin = $stmt->fetch();
 
@@ -35,25 +35,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update_profile') {
         $activeTab = 'profile';
         $username = trim($_POST['username'] ?? '');
-        $email    = trim($_POST['email'] ?? '');
-        $name     = trim($_POST['name'] ?? '');
 
-        if (empty($username) || empty($email) || empty($name)) {
-            $errors[] = 'All profile fields are required.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'Invalid email address format.';
+        if (empty($username)) {
+            $errors[] = 'Username is required.';
         } else {
-            // Check username / email uniqueness
-            $chk = $pdo->prepare("SELECT id FROM admins WHERE (username = :u OR email = :e) AND id != :id");
-            $chk->execute([':u' => $username, ':e' => $email, ':id' => $adminId]);
+            $chk = $pdo->prepare("SELECT id FROM admins WHERE username = :u AND id != :id");
+            $chk->execute([':u' => $username, ':id' => $adminId]);
             if ($chk->fetch()) {
-                $errors[] = 'Username or email already in use by another admin.';
+                $errors[] = 'That username is already in use by another admin.';
             } else {
-                $upd = $pdo->prepare("UPDATE admins SET username = :u, email = :e, name = :n WHERE id = :id");
-                $upd->execute([':u' => $username, ':e' => $email, ':n' => $name, ':id' => $adminId]);
-                $_SESSION['admin_name'] = $name;
-                $_SESSION['admin_email'] = $email;
-                logActivity($adminId, 'Updated Admin Profile', "Username: $username, Email: $email");
+                $upd = $pdo->prepare("UPDATE admins SET username = :u WHERE id = :id");
+                $upd->execute([':u' => $username, ':id' => $adminId]);
+                $_SESSION['admin_name'] = ADMIN_DISPLAY_NAME;
+                logActivity($adminId, 'Updated Admin Username', "Username: $username");
                 setFlash('success', 'Profile updated successfully.');
                 redirect(BASE_URL . '/pages/admin/settings.php?tab=profile');
             }
@@ -112,11 +106,19 @@ include BASE_PATH . '/includes/sidebar.php';
         <a href="?tab=password" class="btn <?= $activeTab === 'password' ? 'btn-primary' : 'btn-ghost' ?>">
             <i data-lucide="lock"></i> Change Password
         </a>
+        <a href="?tab=backup" class="btn <?= $activeTab === 'backup' ? 'btn-primary' : 'btn-ghost' ?>">
+            <i data-lucide="database"></i> Database Backup
+        </a>
         <a href="<?= BASE_URL ?>/pages/memberships/plans.php" class="btn btn-ghost">
             <i data-lucide="credit-card"></i> Manage Membership Plans &rarr;
         </a>
     </div>
+</div>
 
+<?php if ($activeTab === 'backup'): ?>
+    <?php define('DATABASE_BACKUP_EMBEDDED', true); require BASE_PATH . '/pages/admin/backup.php'; ?>
+<?php else: ?>
+<div class="card mb-4">
     <?php if ($activeTab === 'profile'): ?>
         <form method="POST" style="max-width: 520px;">
             <?= csrfField() ?>
@@ -124,17 +126,12 @@ include BASE_PATH . '/includes/sidebar.php';
 
             <div class="form-group mb-3">
                 <label class="form-label" for="name">Display Name</label>
-                <input type="text" class="form-control" id="name" name="name" value="<?= htmlspecialchars($admin['name']) ?>" required>
+                <input type="text" class="form-control" id="name" value="<?= ADMIN_DISPLAY_NAME ?>" readonly>
             </div>
 
             <div class="form-group mb-3">
                 <label class="form-label" for="username">Username</label>
                 <input type="text" class="form-control" id="username" name="username" value="<?= htmlspecialchars($admin['username']) ?>" required>
-            </div>
-
-            <div class="form-group mb-4">
-                <label class="form-label" for="email">Email Address</label>
-                <input type="email" class="form-control" id="email" name="email" value="<?= htmlspecialchars($admin['email']) ?>" required>
             </div>
 
             <button type="submit" class="btn btn-primary">Save Profile Changes</button>
@@ -163,5 +160,6 @@ include BASE_PATH . '/includes/sidebar.php';
         </form>
     <?php endif; ?>
 </div>
+<?php endif; ?>
 
 <?php include BASE_PATH . '/includes/footer.php'; ?>

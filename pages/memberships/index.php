@@ -21,11 +21,10 @@ $where  = ['1=1'];
 $params = [];
 
 if ($search !== '') {
-    $where[]  = "(m.first_name LIKE :first_name OR m.last_name LIKE :last_name OR m.email LIKE :email OR m.phone LIKE :phone)";
+    $where[]  = "(m.first_name LIKE :first_name OR m.last_name LIKE :last_name OR m.phone LIKE :phone)";
     $searchTerm = "%{$search}%";
     $params[':first_name'] = $searchTerm;
     $params[':last_name'] = $searchTerm;
-    $params[':email'] = $searchTerm;
     $params[':phone'] = $searchTerm;
 }
 if (in_array($status, ['active','expired','inactive'], true)) { $where[] = 'ms.status = :status'; $params[':status'] = $status; }

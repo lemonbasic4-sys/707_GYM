@@ -53,11 +53,10 @@ $attendance = $attendance->fetchAll();
 
 // Payment history
 $payments = $db->prepare(
-    "SELECT p.*, pl.name AS plan_name, a.name AS recorded_by_name
+    "SELECT p.*, pl.name AS plan_name
      FROM payments p
      LEFT JOIN memberships ms ON p.membership_id = ms.id
      LEFT JOIN membership_plans pl ON ms.plan_id = pl.id
-     LEFT JOIN admins a ON p.recorded_by = a.id
      WHERE p.member_id = :mid
      ORDER BY p.created_at DESC"
 );
@@ -127,11 +126,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <div class="card">
         <div class="card-header"><span class="card-title">Personal Information</span></div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:14px;">
-            <div><span class="text-muted">Email</span><br><?= sanitize($member['email'] ?? '—') ?></div>
             <div><span class="text-muted">Phone</span><br><?= sanitize($member['phone'] ?? '—') ?></div>
             <div><span class="text-muted">Gender</span><br><?= sanitize(ucfirst($member['gender'] ?? '—')) ?></div>
             <div><span class="text-muted">Date of Birth</span><br><?= $member['date_of_birth'] ? formatDate($member['date_of_birth']) : '—' ?></div>
-            <div style="grid-column:1/-1"><span class="text-muted">Address</span><br><?= sanitize($member['address'] ?? '—') ?></div>
             <div><span class="text-muted">Emergency Contact</span><br><?= sanitize($member['emergency_contact_name'] ?? '—') ?></div>
             <div><span class="text-muted">Emergency Phone</span><br><?= sanitize($member['emergency_contact_phone'] ?? '—') ?></div>
         </div>

@@ -31,6 +31,14 @@ switch ($action) {
         }
 
         $headers = fgetcsv($handle);
+        $headerMap = [];
+        foreach ($headers ?: [] as $index => $header) {
+            $header = strtolower(trim((string) $header));
+            if ($index === 0) {
+                $header = preg_replace('/^\xEF\xBB\xBF/', '', $header);
+            }
+            $headerMap[$header] = $index;
+        }
         $previewRows = [];
         $rowCount = 0;
         while (($row = fgetcsv($handle)) !== false && $rowCount < 10) {
@@ -76,12 +84,11 @@ switch ($action) {
                 if (count($row) < 2) continue; // skip empty rows
 
                 if ($type === 'members') {
-                    // Expect: first_name, last_name, email, phone, gender
-                    $fname = trim($row[0] ?? '');
-                    $lname = trim($row[1] ?? '');
-                    $email = trim($row[2] ?? '');
-                    $phone = trim($row[3] ?? '');
-                    $gender = trim($row[4] ?? 'other');
+                    $fname = trim($row[$headerMap['first_name'] ?? 0] ?? '');
+                    $lname = trim($row[$headerMap['last_name'] ?? 1] ?? '');
+                    $phoneIndex = $headerMap['phone'] ?? (isset($headerMap['email']) ? 3 : 2);
+                    $phone = trim($row[$phoneIndex] ?? '');
+                    $gender = trim($row[$headerMap['gender'] ?? (isset($headerMap['email']) ? 4 : 3)] ?? 'other');
 
                     if (empty($fname) || empty($lname)) {
                         $errors[] = "Row $rowNum: Missing required name fields.";
@@ -89,11 +96,7 @@ switch ($action) {
                     }
 
                     $existing = false;
-                    if ($email !== '') {
-                        $chk = $pdo->prepare("SELECT id FROM members WHERE email = :email LIMIT 1");
-                        $chk->execute([':email' => $email]);
-                        $existing = $chk->fetch();
-                    } elseif ($phone !== '') {
+                    if ($phone !== '') {
                         $chk = $pdo->prepare("SELECT id FROM members WHERE phone = :phone LIMIT 1");
                         $chk->execute([':phone' => $phone]);
                         $existing = $chk->fetch();
@@ -101,15 +104,15 @@ switch ($action) {
 
                     if ($existing) {
                         if ($actionOnMatch === 'update') {
-                            $upd = $pdo->prepare("UPDATE members SET first_name = :fn, last_name = :ln, email = :e, phone = :p WHERE id = :id");
-                            $upd->execute([':fn' => $fname, ':ln' => $lname, ':e' => $email ?: null, ':p' => $phone ?: null, ':id' => $existing['id']]);
+                            $upd = $pdo->prepare("UPDATE members SET first_name = :fn, last_name = :ln, phone = :p WHERE id = :id");
+                            $upd->execute([':fn' => $fname, ':ln' => $lname, ':p' => $phone ?: null, ':id' => $existing['id']]);
                             $updated++;
                         } else {
                             $skipped++;
                         }
                     } else {
-                        $ins = $pdo->prepare("INSERT INTO members (first_name, last_name, email, phone, gender, status) VALUES (:fn, :ln, :e, :p, :g, 'active')");
-                        $ins->execute([':fn' => $fname, ':ln' => $lname, ':e' => $email ?: null, ':p' => $phone ?: null, ':g' => $gender]);
+                        $ins = $pdo->prepare("INSERT INTO members (first_name, last_name, phone, gender, status) VALUES (:fn, :ln, :p, :g, 'active')");
+                        $ins->execute([':fn' => $fname, ':ln' => $lname, ':p' => $phone ?: null, ':g' => $gender]);
                         $imported++;
                     }
                 }

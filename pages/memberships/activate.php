@@ -15,6 +15,15 @@ $db     = Database::getConnection();
 $errors = [];
 
 $preMemberId = (int)($_GET['member_id'] ?? 0);
+$selectedMemberId = (int)($_POST['member_id'] ?? $preMemberId);
+$selectedMemberName = '';
+if ($selectedMemberId > 0) {
+    $selectedMemberStmt = $db->prepare(
+        "SELECT CONCAT(first_name, ' ', last_name) FROM members WHERE id = :id AND status = 'active'"
+    );
+    $selectedMemberStmt->execute([':id' => $selectedMemberId]);
+    $selectedMemberName = (string)($selectedMemberStmt->fetchColumn() ?: '');
+}
 
 $plans    = $db->query("SELECT * FROM membership_plans WHERE status='active' ORDER BY name")->fetchAll();
 
@@ -108,9 +117,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
         <div class="form-group">
             <label>Member <span class="required">*</span></label>
-            <input type="text" id="memberSearch" placeholder="Type member name to search..." autocomplete="off">
-            <input type="hidden" name="member_id" id="memberIdHidden" value="<?= $preMemberId ?>">
-            <span class="form-hint">Start typing to search by name, email, or phone.</span>
+            <input type="text" id="memberSearch" placeholder="Choose a member or type to search..." autocomplete="off"
+                value="<?= sanitize($selectedMemberName) ?>" aria-required="true">
+            <input type="hidden" name="member_id" id="memberIdHidden" value="<?= $selectedMemberName !== '' ? $selectedMemberId : 0 ?>">
+            <span class="form-hint">Open the list to browse active members, or type a name or phone number to search.</span>
         </div>
 
         <div class="form-group">
@@ -166,7 +176,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    initMemberTypeahead('memberSearch', 'memberIdHidden', '<?= BASE_URL ?>/api/members.php');
+    initMemberTypeahead('memberSearch', 'memberIdHidden', '<?= BASE_URL ?>/api/members.php', true);
 });
 
 function updatePlanDetails() {

@@ -16,8 +16,6 @@ $errors = [];
 $transactionTypes = [
     'membership_renewal' => 'Membership Renewal',
     'walk_in_pass' => 'Walk-in Pass',
-    'companion_bundle' => 'Companion Bundle',
-    'coaching_package' => 'Coaching Package',
 ];
 $paymentMethods = [
     'cash' => 'Cash',
@@ -26,9 +24,13 @@ $paymentMethods = [
     'card' => 'Card',
 ];
 $plans = $db->query("SELECT id, name, duration_days, price FROM membership_plans WHERE status = 'active' ORDER BY name")->fetchAll();
+$requestedType = $_POST['transaction_type'] ?? $_GET['type'] ?? 'membership_renewal';
+if (!is_string($requestedType) || !isset($transactionTypes[$requestedType])) {
+    $requestedType = 'membership_renewal';
+}
 
 $form = [
-    'transaction_type' => $_POST['transaction_type'] ?? 'membership_renewal',
+    'transaction_type' => $requestedType,
     'member_id' => (int)($_POST['member_id'] ?? 0),
     'plan_id' => (int)($_POST['plan_id'] ?? 0),
     'amount' => $_POST['amount'] ?? '',
@@ -236,7 +238,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <input type="radio" name="transaction_type" value="<?= sanitize($value) ?>"
                         <?= $form['transaction_type'] === $value ? 'checked' : '' ?>>
                     <span class="transaction-type-button">
-                        <i data-lucide="<?= $value === 'membership_renewal' ? 'refresh-cw' : ($value === 'walk_in_pass' ? 'user-round' : ($value === 'companion_bundle' ? 'users-round' : 'dumbbell')) ?>"></i>
+                        <i data-lucide="<?= $value === 'membership_renewal' ? 'refresh-cw' : 'user-round' ?>"></i>
                         <?= sanitize($label) ?>
                     </span>
                 </label>
@@ -265,8 +267,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         </div>
 
         <div class="payment-field payment-package-price" <?= $form['transaction_type'] === 'membership_renewal' ? 'hidden' : '' ?>>
-            <label for="packagePrice">Package Price (PHP) <span class="required">*</span></label>
-            <input type="number" id="packagePrice" name="amount" min="0.01" step="0.01" placeholder="Enter package price"
+            <label for="packagePrice">Walk-in Price (PHP) <span class="required">*</span></label>
+            <input type="number" id="packagePrice" name="amount" min="0.01" step="0.01" placeholder="Enter walk-in price"
                 value="<?= sanitize((string)$form['amount']) ?>">
         </div>
 
@@ -338,7 +340,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector('.payment-membership-date').hidden = !isMembership;
         plan.required = isMembership;
         packagePrice.required = !isMembership;
-
         const selectedPlan = plan.options[plan.selectedIndex];
         const subtotal = isMembership ? Number(selectedPlan.dataset.price || 0) : Number(packagePrice.value || 0);
         const discountAmount = Number(discount.value || 0);

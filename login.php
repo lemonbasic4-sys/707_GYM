@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?= csrfField() ?>
 
         <div class="form-group">
-            <label for="username">Username or Email</label>
+            <label for="username">Username</label>
             <input
                 type="text"
                 id="username"

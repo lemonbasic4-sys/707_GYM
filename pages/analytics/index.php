@@ -38,102 +38,133 @@ include BASE_PATH . '/includes/header.php';
 include BASE_PATH . '/includes/sidebar.php';
 ?>
 
-<div class="page-header">
-    <div class="page-header-left">
-        <h1>Analytics &amp; Reports</h1>
-        <p>Track operational performance, revenue trends, and member insights</p>
-    </div>
-    <div class="page-header-actions">
+<div class="analytics-overview">
+    <header class="analytics-heading">
+        <div class="analytics-heading-copy">
+            <span class="analytics-eyebrow"><i data-lucide="chart-no-axes-combined" aria-hidden="true"></i> INSIGHTS &amp; REPORTS</span>
+            <h1>Analytics overview</h1>
+            <p>A clear view of your gym’s revenue, members, and daily activity.</p>
+        </div>
+        <nav class="analytics-actions" aria-label="Analytics actions">
+            <a href="<?= BASE_URL ?>/pages/analytics/branches.php" class="btn btn-primary">
+                <i data-lucide="git-compare-arrows" aria-hidden="true"></i> Compare branches
+            </a>
             <a href="<?= BASE_URL ?>/exports/pdf.php?type=analytics" class="btn btn-secondary">
-                <i data-lucide="file-text"></i> Export PDF
+                <i data-lucide="file-text" aria-hidden="true"></i> Export report
             </a>
-            <a href="<?= BASE_URL ?>/exports/excel.php?type=analytics" class="btn btn-secondary">
-                <i data-lucide="file-spreadsheet"></i> Export Excel
-            </a>
+        </nav>
+    </header>
+
+    <section class="analytics-period" aria-label="Current reporting period">
+        <div class="analytics-period-icon"><i data-lucide="calendar-days" aria-hidden="true"></i></div>
+        <div>
+            <span class="analytics-period-label">REPORTING PERIOD</span>
+            <strong><?= sanitize(date('F Y')) ?></strong>
+        </div>
+        <span class="analytics-period-note">Live data from this gym</span>
+    </section>
+
+    <section class="analytics-kpis" aria-label="Key performance indicators">
+        <article class="analytics-kpi analytics-kpi-revenue">
+            <div class="analytics-kpi-top">
+                <span class="analytics-kpi-icon"><i data-lucide="wallet" aria-hidden="true"></i></span>
+                <span class="analytics-kpi-period">THIS MONTH</span>
+            </div>
+            <span class="analytics-kpi-label">Revenue collected</span>
+            <strong class="analytics-kpi-value"><?= formatPhilippineCurrency($monthRevenue) ?></strong>
+            <span class="analytics-kpi-note">Paid transactions</span>
+        </article>
+
+        <article class="analytics-kpi analytics-kpi-members">
+            <div class="analytics-kpi-top">
+                <span class="analytics-kpi-icon"><i data-lucide="user-plus" aria-hidden="true"></i></span>
+                <span class="analytics-kpi-period">THIS MONTH</span>
+            </div>
+            <span class="analytics-kpi-label">New members</span>
+            <strong class="analytics-kpi-value"><?= number_format((int) $newMembers) ?></strong>
+            <span class="analytics-kpi-note">Recently joined</span>
+        </article>
+
+        <article class="analytics-kpi analytics-kpi-attendance">
+            <div class="analytics-kpi-top">
+                <span class="analytics-kpi-icon"><i data-lucide="calendar-check" aria-hidden="true"></i></span>
+                <span class="analytics-kpi-period">TODAY</span>
+            </div>
+            <span class="analytics-kpi-label">Gym visits</span>
+            <strong class="analytics-kpi-value"><?= number_format((int) $todayAttendance) ?></strong>
+            <span class="analytics-kpi-note">Check-ins recorded</span>
+        </article>
+
+        <article class="analytics-kpi analytics-kpi-plan">
+            <div class="analytics-kpi-top">
+                <span class="analytics-kpi-icon"><i data-lucide="award" aria-hidden="true"></i></span>
+                <span class="analytics-kpi-period">TOP PLAN</span>
+            </div>
+            <span class="analytics-kpi-label">Most popular</span>
+            <strong class="analytics-kpi-value analytics-kpi-plan-name"><?= sanitize($topPlan['name']) ?></strong>
+            <span class="analytics-kpi-note"><?= number_format((int) $topPlan['cnt']) ?> membership records</span>
+        </article>
+    </section>
+
+    <section class="analytics-section-heading">
+        <div>
+            <span class="analytics-eyebrow">PERFORMANCE</span>
+            <h2>Trends at a glance</h2>
+        </div>
+        <span class="analytics-section-caption">Updated from your latest records</span>
+    </section>
+
+    <section class="analytics-chart-grid analytics-chart-grid-primary" aria-label="Revenue and plan analytics">
+        <article class="card analytics-chart-card analytics-chart-card-revenue">
+            <div class="analytics-chart-heading">
+                <span class="analytics-chart-icon analytics-chart-icon-orange"><i data-lucide="trending-up" aria-hidden="true"></i></span>
+                <div>
+                    <h3>Revenue trend</h3>
+                    <p>Paid collections over the last 12 months</p>
+                </div>
+                <a href="<?= BASE_URL ?>/pages/analytics/revenue.php" class="analytics-chart-link" aria-label="View revenue breakdown"><i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
+            </div>
+            <div class="analytics-chart-canvas"><canvas id="revenueTrendChart" aria-label="Revenue trend for the last 12 months" role="img"></canvas></div>
+        </article>
+
+        <article class="card analytics-chart-card">
+            <div class="analytics-chart-heading">
+                <span class="analytics-chart-icon analytics-chart-icon-violet"><i data-lucide="pie-chart" aria-hidden="true"></i></span>
+                <div>
+                    <h3>Membership plan mix</h3>
+                    <p>Membership records by plan</p>
+                </div>
+                <a href="<?= BASE_URL ?>/pages/analytics/membership.php" class="analytics-chart-link" aria-label="View membership breakdown"><i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
+            </div>
+            <div class="analytics-chart-canvas"><canvas id="membershipStatusChart" aria-label="Membership records by plan" role="img"></canvas></div>
+        </article>
+    </section>
+
+    <section class="analytics-chart-grid" aria-label="Attendance and member growth analytics">
+        <article class="card analytics-chart-card">
+            <div class="analytics-chart-heading">
+                <span class="analytics-chart-icon analytics-chart-icon-blue"><i data-lucide="activity" aria-hidden="true"></i></span>
+                <div>
+                    <h3>Daily attendance</h3>
+                    <p>Gym visits over the last 14 days</p>
+                </div>
+                <a href="<?= BASE_URL ?>/pages/analytics/attendance.php" class="analytics-chart-link" aria-label="View attendance breakdown"><i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
+            </div>
+            <div class="analytics-chart-canvas"><canvas id="attendanceTrendChart" aria-label="Daily attendance over the last 14 days" role="img"></canvas></div>
+        </article>
+
+        <article class="card analytics-chart-card">
+            <div class="analytics-chart-heading">
+                <span class="analytics-chart-icon analytics-chart-icon-green"><i data-lucide="users" aria-hidden="true"></i></span>
+                <div>
+                    <h3>Member growth</h3>
+                    <p>New members over the last six months</p>
+                </div>
+            </div>
+            <div class="analytics-chart-canvas"><canvas id="membershipGrowthChart" aria-label="New member growth over the last six months" role="img"></canvas></div>
+        </article>
+    </section>
 </div>
-    </div>
-
-    <!-- Quick Stats -->
-    <div class="stats-grid mb-4">
-        <div class="kpi-card">
-            <div class="kpi-icon" style="color: var(--accent); background: rgba(255,77,0,0.1);">
-                <i data-lucide="dollar-sign"></i>
-            </div>
-            <div class="kpi-details">
-                <span class="kpi-label">This Month Revenue</span>
-                <span class="kpi-value"><?= formatPhilippineCurrency($monthRevenue) ?></span>
-            </div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-icon" style="color: #3b82f6; background: rgba(59,130,246,0.1);">
-                <i data-lucide="user-plus"></i>
-            </div>
-            <div class="kpi-details">
-                <span class="kpi-label">New Members (Month)</span>
-                <span class="kpi-value"><?= number_format($newMembers) ?></span>
-            </div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-icon" style="color: #10b981; background: rgba(16,185,129,0.1);">
-                <i data-lucide="calendar-check"></i>
-            </div>
-            <div class="kpi-details">
-                <span class="kpi-label">Today Attendance</span>
-                <span class="kpi-value"><?= number_format($todayAttendance) ?></span>
-            </div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-icon" style="color: #a855f7; background: rgba(168,85,247,0.1);">
-                <i data-lucide="award"></i>
-            </div>
-            <div class="kpi-details">
-                <span class="kpi-label">Most Popular Plan</span>
-                <span class="kpi-value" style="font-size: 1.15rem;"><?= htmlspecialchars($topPlan['name']) ?></span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Charts Section -->
-    <div class="charts-grid mb-4">
-        <div class="card">
-            <div class="card-header flex-between mb-3">
-                <h3 class="card-title">Revenue Trend (Last 12 Months)</h3>
-                <a href="<?= BASE_URL ?>/pages/analytics/revenue.php" class="text-accent text-sm">Detailed Breakdown &rarr;</a>
-            </div>
-            <div class="chart-container" style="position: relative; height:280px;">
-                <canvas id="revenueTrendChart"></canvas>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-header flex-between mb-3">
-                <h3 class="card-title">Membership Status Distribution</h3>
-                <a href="<?= BASE_URL ?>/pages/analytics/membership.php" class="text-accent text-sm">Detailed Breakdown &rarr;</a>
-            </div>
-            <div class="chart-container" style="position: relative; height:280px;">
-                <canvas id="membershipStatusChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <div class="charts-grid mb-4">
-        <div class="card">
-            <div class="card-header flex-between mb-3">
-                <h3 class="card-title">Daily Attendance Trends</h3>
-                <a href="<?= BASE_URL ?>/pages/analytics/attendance.php" class="text-accent text-sm">Detailed Breakdown &rarr;</a>
-            </div>
-            <div class="chart-container" style="position: relative; height:280px;">
-                <canvas id="attendanceTrendChart"></canvas>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-header flex-between mb-3">
-                <h3 class="card-title">Member Growth</h3>
-            </div>
-            <div class="chart-container" style="position: relative; height:280px;">
-                <canvas id="membershipGrowthChart"></canvas>
-            </div>
-        </div>
-    </div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Fetch Revenue Trend

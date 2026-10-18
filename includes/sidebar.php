@@ -7,9 +7,7 @@
  */
 
 $currentPath = $_SERVER['REQUEST_URI'] ?? '';
-$adminName   = $_SESSION['admin_name']  ?? 'Admin';
-$adminEmail  = $_SESSION['admin_email'] ?? '';
-$initials    = getInitials($adminName);
+$adminName   = ADMIN_DISPLAY_NAME;
 
 /**
  * Helper: return 'active' class if $segment is in the current URL path.
@@ -103,10 +101,9 @@ $isDashboard = (str_contains($currentPath, 'dashboard') || rtrim(parse_url($curr
 
     <!-- Admin Profile -->
     <div class="sidebar-footer">
-        <div class="admin-avatar" aria-hidden="true"><?= htmlspecialchars($initials) ?></div>
+        <img class="admin-avatar" src="<?= BASE_URL ?>/assets/img/gym_logo.png" alt="707 GYM logo">
         <div class="admin-info">
             <span class="admin-name"><?= sanitize($adminName) ?></span>
-            <span class="admin-email"><?= sanitize($adminEmail) ?></span>
         </div>
         <a href="<?= BASE_URL ?>/logout.php" class="btn-icon" title="Logout">
             <i data-lucide="log-out"></i>

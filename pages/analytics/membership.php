@@ -24,7 +24,7 @@ $stmt = $pdo->query($countSql);
 $counts = $stmt->fetch();
 
 // Inactive/Expired members list (Members with expired memberships who haven't renewed)
-$inactiveSql = "SELECT m.id AS member_record_id, m.first_name, m.last_name, m.phone, m.email,
+$inactiveSql = "SELECT m.id AS member_record_id, m.first_name, m.last_name, m.phone,
     MAX(ms.end_date) as last_expiry
     FROM members m
     LEFT JOIN memberships ms ON m.id = ms.member_id

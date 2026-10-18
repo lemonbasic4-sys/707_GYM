@@ -244,7 +244,7 @@ function initDataTable(tableId, inputId = null) {
  * @param {string} hiddenId       Hidden input to store selected member record ID
  * @param {string} apiUrl         URL for GET ?action=search&q=
  */
-function initMemberTypeahead(inputId, hiddenId, apiUrl) {
+function initMemberTypeahead(inputId, hiddenId, apiUrl, showListOnFocus = false) {
     const input  = document.getElementById(inputId);
     const hidden = document.getElementById(hiddenId);
     if (!input || !hidden) return;
@@ -257,46 +257,126 @@ function initMemberTypeahead(inputId, hiddenId, apiUrl) {
         border-radius:var(--radius-sm); list-style:none;
         max-height:220px; overflow-y:auto; display:none; margin:0; padding:4px 0;
     `;
+    dropdown.id = `${inputId}Options`;
+    dropdown.setAttribute('role', 'listbox');
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('aria-controls', dropdown.id);
     input.parentElement.style.position = 'relative';
     input.parentElement.appendChild(dropdown);
 
     let debounceTimer;
+    let activeOption = -1;
+    let requestId = 0;
+
+    function hideDropdown() {
+        dropdown.style.display = 'none';
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+        activeOption = -1;
+    }
+
+    function showMessage(message) {
+        dropdown.replaceChildren();
+        const item = document.createElement('li');
+        item.textContent = message;
+        item.style.cssText = 'padding:9px 14px; font-size:12px; color:var(--muted);';
+        item.setAttribute('role', 'presentation');
+        dropdown.appendChild(item);
+        dropdown.style.display = 'block';
+        input.setAttribute('aria-expanded', 'true');
+    }
+
+    async function loadMembers(query = '') {
+        const currentRequest = ++requestId;
+        const url = query
+            ? `${apiUrl}?action=search&q=${encodeURIComponent(query)}`
+            : `${apiUrl}?action=list&per_page=10`;
+        showMessage(query ? 'Searching members…' : 'Loading members…');
+
+        try {
+            const result = await apiRequest(url);
+            if (currentRequest !== requestId) return;
+            if (!result.success || !Array.isArray(result.data)) {
+                throw new Error('Member search returned an invalid response.');
+            }
+
+            dropdown.replaceChildren();
+            if (result.data.length === 0) {
+                showMessage('No active members found.');
+                return;
+            }
+
+            result.data.forEach(member => {
+                const item = document.createElement('li');
+                const name = `${member.first_name} ${member.last_name}`;
+                const contact = member.phone || '';
+                item.textContent = contact ? `${name} · ${contact}` : name;
+                item.id = `${inputId}Option${member.id}`;
+                item.setAttribute('role', 'option');
+                item.setAttribute('aria-selected', 'false');
+                item.style.cssText = 'padding:9px 14px; cursor:pointer; font-size:13px; color:var(--text);';
+                item.addEventListener('mouseenter', () => item.style.background = 'rgba(255,255,255,0.06)');
+                item.addEventListener('mouseleave', () => item.style.background = '');
+                item.addEventListener('mousedown', event => event.preventDefault());
+                item.addEventListener('click', () => {
+                    input.value = name;
+                    hidden.value = member.id;
+                    hideDropdown();
+                });
+                dropdown.appendChild(item);
+            });
+            dropdown.style.display = 'block';
+            input.setAttribute('aria-expanded', 'true');
+        } catch (error) {
+            if (currentRequest !== requestId) return;
+            console.error('Unable to load member options:', error);
+            showMessage('Unable to load members. Please try again.');
+        }
+    }
 
     input.addEventListener('input', () => {
         clearTimeout(debounceTimer);
+        hidden.value = '';
         const q = input.value.trim();
-        if (q.length < 2) { dropdown.style.display = 'none'; return; }
+        if (!q) {
+            if (showListOnFocus) loadMembers();
+            else hideDropdown();
+            return;
+        }
 
-        debounceTimer = setTimeout(async () => {
-            try {
-                const data = await apiRequest(`${apiUrl}?action=search&q=${encodeURIComponent(q)}`);
-                dropdown.innerHTML = '';
-                if (data.success && data.data.length) {
-                    data.data.forEach(member => {
-                        const li = document.createElement('li');
-                        li.textContent = `${member.first_name} ${member.last_name}${member.phone ? ` - ${member.phone}` : ''}`;
-                        li.style.cssText = 'padding:9px 14px; cursor:pointer; font-size:13px; color:var(--text);';
-                        li.addEventListener('mouseenter', () => li.style.background = 'rgba(255,255,255,0.06)');
-                        li.addEventListener('mouseleave', () => li.style.background = '');
-                        li.addEventListener('click', () => {
-                            input.value  = `${member.first_name} ${member.last_name}`;
-                            hidden.value = member.id;
-                            dropdown.style.display = 'none';
-                        });
-                        dropdown.appendChild(li);
-                    });
-                    dropdown.style.display = 'block';
-                } else {
-                    dropdown.style.display = 'none';
-                }
-            } catch (_) {
-                dropdown.style.display = 'none';
-            }
-        }, 280);
+        debounceTimer = setTimeout(() => loadMembers(q), 250);
     });
 
-    document.addEventListener('click', e => {
-        if (!input.parentElement.contains(e.target)) dropdown.style.display = 'none';
+    input.addEventListener('focus', () => {
+        if (showListOnFocus) loadMembers();
+    });
+
+    input.addEventListener('keydown', event => {
+        const options = [...dropdown.querySelectorAll('[role="option"]')];
+        if (!options.length) {
+            if (event.key === 'Escape') hideDropdown();
+            return;
+        }
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            activeOption = event.key === 'ArrowDown'
+                ? (activeOption + 1) % options.length
+                : (activeOption - 1 + options.length) % options.length;
+            options.forEach((option, index) => option.setAttribute('aria-selected', String(index === activeOption)));
+            input.setAttribute('aria-activedescendant', options[activeOption].id);
+        } else if (event.key === 'Enter' && activeOption >= 0) {
+            event.preventDefault();
+            options[activeOption].click();
+        } else if (event.key === 'Escape') {
+            hideDropdown();
+        }
+    });
+
+    document.addEventListener('click', event => {
+        if (!input.parentElement.contains(event.target)) hideDropdown();
     });
 }
 

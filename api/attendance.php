@@ -28,27 +28,6 @@ switch ($action) {
         echo json_encode(['success' => true, 'data' => $stmt->fetchAll()]);
         break;
 
-    case 'checkin':
-        $memberId = (int)($_POST['member_id'] ?? 0);
-        if (!$memberId) {
-            echo json_encode(['success' => false, 'message' => 'Member ID required']);
-            exit;
-        }
-
-        // Check if already checked in today
-        $chk = $pdo->prepare("SELECT id FROM attendance WHERE member_id = :m AND date = CURRENT_DATE()");
-        $chk->execute([':m' => $memberId]);
-        if ($chk->fetch()) {
-            echo json_encode(['success' => false, 'message' => 'Member has already checked in today']);
-            exit;
-        }
-
-        $ins = $pdo->prepare("INSERT INTO attendance (member_id, check_in, date) VALUES (:m, NOW(), CURRENT_DATE())");
-        $ins->execute([':m' => $memberId]);
-        logActivity($_SESSION['admin_id'], 'Attendance Check-in', "Member ID: $memberId");
-        echo json_encode(['success' => true, 'message' => 'Check-in recorded']);
-        break;
-
     case 'checkout':
         $attId = (int)($_POST['attendance_id'] ?? 0);
         if (!$attId) {

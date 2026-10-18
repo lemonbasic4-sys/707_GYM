@@ -23,10 +23,10 @@ if (!in_array($type, $allowedTypes, true)) {
 
 // ── System fields per type ────────────────────────────────────────────────────
 $systemFields = [
-    'members'      => ['first_name','last_name','email','phone','address','gender','date_of_birth'],
-    'memberships'  => ['member_email','plan_name','start_date','end_date','status'],
-    'attendance'   => ['member_email','check_in','check_out','date'],
-    'payments'     => ['member_email','amount','payment_method','payment_date','status'],
+    'members'      => ['first_name','last_name','phone','gender','date_of_birth'],
+    'memberships'  => ['member_phone','plan_name','start_date','end_date','status'],
+    'attendance'   => ['member_phone','check_in','check_out','date'],
+    'payments'     => ['member_phone','amount','payment_method','payment_date','status'],
 ];
 $fields = $systemFields[$type];
 
@@ -105,14 +105,9 @@ if ($step === 4 && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['execut
 
                 if ($type === 'members') {
                     if (empty($record['first_name'])) { $skipped++; continue; }
-                    $email = trim($record['email'] ?? '');
                     $phone = trim($record['phone'] ?? '');
                     $existing = null;
-                    if ($email !== '') {
-                        $existingStmt = $db->prepare("SELECT id FROM members WHERE email = :email LIMIT 1");
-                        $existingStmt->execute([':email' => $email]);
-                        $existing = $existingStmt->fetchColumn();
-                    } elseif ($phone !== '') {
+                    if ($phone !== '') {
                         $existingStmt = $db->prepare("SELECT id FROM members WHERE phone = :phone LIMIT 1");
                         $existingStmt->execute([':phone' => $phone]);
                         $existing = $existingStmt->fetchColumn();
@@ -122,19 +117,18 @@ if ($step === 4 && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['execut
                         continue;
                     }
                     $db->prepare(
-                        "INSERT INTO members (first_name,last_name,email,phone,address,gender,date_of_birth,status,created_at,updated_at)
-                         VALUES (:fn,:ln,:em,:ph,:ad,:gn,:dob,'active',NOW(),NOW())"
+                        "INSERT INTO members (first_name,last_name,phone,gender,date_of_birth,status,created_at,updated_at)
+                         VALUES (:fn,:ln,:ph,:gn,:dob,'active',NOW(),NOW())"
                     )->execute([
                         ':fn'=>$record['first_name'],':ln'=>$record['last_name']??'',
-                        ':em'=>$email ?: null,':ph'=>$phone ?: null,
-                        ':ad'=>$record['address']??null,':gn'=>$record['gender']??null,
+                        ':ph'=>$phone ?: null,':gn'=>$record['gender']??null,
                         ':dob'=>$record['date_of_birth']??null,
                     ]);
                     $imported++;
                 } elseif ($type === 'attendance') {
                     // Look up member
-                    $mStmt = $db->prepare("SELECT id FROM members WHERE email = :email LIMIT 1");
-                    $mStmt->execute([':email'=>trim($record['member_email'] ?? '')]);
+                    $mStmt = $db->prepare("SELECT id FROM members WHERE phone = :phone LIMIT 1");
+                    $mStmt->execute([':phone'=>trim($record['member_phone'] ?? '')]);
                     $mRow = $mStmt->fetch();
                     if (!$mRow) { $skipped++; $errDetails[] = "Row ".($i+2).": member not found."; continue; }
                     $db->prepare(

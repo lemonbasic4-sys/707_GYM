@@ -85,15 +85,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 
 <!-- Page Header -->
-<div class="page-header">
+<div class="page-header dashboard-page-header">
     <div class="page-header-left">
         <h1>Dashboard</h1>
-        <p>Welcome back, <?= sanitize($_SESSION['admin_name']) ?>. Here is what's happening today.</p>
-    </div>
-    <div class="page-header-actions">
-        <a href="<?= BASE_URL ?>/pages/members/create.php" class="btn btn-primary">
-            <i data-lucide="user-plus"></i> Add Member
-        </a>
+        <p>Welcome back, <?= sanitize(ADMIN_DISPLAY_NAME) ?>. Here is what's happening today.</p>
     </div>
 </div>
 
@@ -117,7 +112,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <div class="kpi-icon"><i data-lucide="calendar-check"></i></div>
         <div class="kpi-body">
             <div class="kpi-value"><?= number_format($todayAttendance) ?></div>
-            <div class="kpi-label">Today's Check-ins</div>
+            <div class="kpi-label">Today's Attendance</div>
         </div>
     </div>
     <div class="kpi-card">
@@ -128,6 +123,34 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
     </div>
 </div>
+
+<!-- Quick action dock -->
+<section class="dashboard-shortcuts" aria-labelledby="dashboardShortcutsTitle">
+    <div class="dashboard-shortcuts-heading">
+        <div>
+            <span class="dashboard-shortcuts-eyebrow">QUICK ACTIONS</span>
+            <h2 id="dashboardShortcutsTitle">Shortcuts</h2>
+        </div>
+        <span>Common tasks, one click away</span>
+    </div>
+    <nav class="dashboard-shortcuts-dock" aria-label="Dashboard shortcuts">
+        <a class="dashboard-shortcut" href="<?= BASE_URL ?>/pages/payments/record.php">
+            <span class="dashboard-shortcut-icon shortcut-orange"><i data-lucide="receipt"></i></span>
+            <span class="dashboard-shortcut-copy"><strong>Record Payment</strong><small>Membership or walk-in</small></span>
+            <i class="dashboard-shortcut-arrow" data-lucide="arrow-up-right"></i>
+        </a>
+        <a class="dashboard-shortcut dashboard-shortcut-walkin" href="<?= BASE_URL ?>/pages/payments/record.php?type=walk_in_pass">
+            <span class="dashboard-shortcut-icon shortcut-green"><i data-lucide="user-round"></i></span>
+            <span class="dashboard-shortcut-copy"><strong>Walk-in Pass</strong><small>Enter price at checkout</small></span>
+            <i class="dashboard-shortcut-arrow" data-lucide="arrow-up-right"></i>
+        </a>
+        <a class="dashboard-shortcut" href="<?= BASE_URL ?>/pages/members/create.php">
+            <span class="dashboard-shortcut-icon shortcut-violet"><i data-lucide="user-plus"></i></span>
+            <span class="dashboard-shortcut-copy"><strong>Add Member</strong><small>Create a member profile</small></span>
+            <i class="dashboard-shortcut-arrow" data-lucide="arrow-up-right"></i>
+        </a>
+    </nav>
+</section>
 
 <!-- Charts Row -->
 <div class="charts-grid">

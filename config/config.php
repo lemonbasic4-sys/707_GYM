@@ -8,6 +8,7 @@
 define('APP_NAME',    '707 GYM');
 define('APP_VERSION', '1.0.0');
 define('APP_ENV',     'development'); // 'production' in live
+define('ADMIN_DISPLAY_NAME', 'System Administrator');
 
 // ─── Base Path ────────────────────────────────────────────────────────────────
 // Treat 707_GYM as web root served from htdocs/707_GYM
@@ -20,6 +21,7 @@ define('DB_NAME',    'gym_707');
 define('DB_USER',    'root');
 define('DB_PASS',    '');
 define('DB_CHARSET', 'utf8mb4');
+define('DATABASE_BACKUP_PATH', dirname(dirname(BASE_PATH)) . DIRECTORY_SEPARATOR . basename(BASE_PATH) . '_backups');
 
 // ─── Timezone ────────────────────────────────────────────────────────────────
 define('APP_TIMEZONE', 'Asia/Manila');

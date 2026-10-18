@@ -30,11 +30,10 @@ $where  = ["a.date = CURDATE()"];
 $params = [];
 
 if ($search !== '') {
-    $where[]  = "(m.first_name LIKE :first_name OR m.last_name LIKE :last_name OR m.email LIKE :email OR m.phone LIKE :phone)";
+    $where[]  = "(m.first_name LIKE :first_name OR m.last_name LIKE :last_name OR m.phone LIKE :phone)";
     $searchTerm = "%{$search}%";
     $params[':first_name'] = $searchTerm;
     $params[':last_name'] = $searchTerm;
-    $params[':email'] = $searchTerm;
     $params[':phone'] = $searchTerm;
 }
 $whereSQL = implode(' AND ', $where);
@@ -61,9 +60,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <p><?= date('F j, Y') ?> &bull; <?= count($records) ?> check-in<?= count($records)!==1?'s':'' ?></p>
     </div>
     <div class="page-header-actions">
-        <a href="<?= BASE_URL ?>/pages/attendance/checkin.php" class="btn btn-primary">
-            <i data-lucide="log-in"></i> Quick Check-in
-        </a>
         <a href="<?= BASE_URL ?>/pages/attendance/history.php" class="btn btn-secondary">
             <i data-lucide="history"></i> History
         </a>
@@ -80,8 +76,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <?php if (empty($records)): ?>
     <div class="empty-state">
         <i data-lucide="calendar-x"></i>
-        <h3>No check-ins today</h3>
-        <p>Use Quick Check-in to record attendance.</p>
+        <h3>No attendance recorded today</h3>
     </div>
     <?php else: ?>
     <div class="table-wrapper">

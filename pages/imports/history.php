@@ -13,9 +13,8 @@ requireAuth();
 $db = Database::getConnection();
 
 $logs = $db->query(
-    "SELECT il.*, a.name AS admin_name
+    "SELECT il.*
      FROM import_logs il
-     LEFT JOIN admins a ON il.imported_by = a.id
      ORDER BY il.created_at DESC"
 )->fetchAll();
 
@@ -54,7 +53,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <td><?= (int)$log['updated'] ?></td>
                     <td class="text-muted"><?= (int)$log['skipped'] ?></td>
                     <td class="<?= (int)$log['errors']>0?'text-danger':'' ?>"><?= (int)$log['errors'] ?></td>
-                    <td><?= sanitize($log['admin_name'] ?? '—') ?></td>
+                    <td><?= sanitize(ADMIN_DISPLAY_NAME) ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>

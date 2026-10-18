@@ -61,7 +61,6 @@ ob_start();
                 <tr>
                     <th>Name</th>
                     <th>Phone</th>
-                    <th>Email</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -70,7 +69,6 @@ ob_start();
                     <tr>
                         <td><?= htmlspecialchars($m['first_name'] . ' ' . $m['last_name']) ?></td>
                         <td><?= htmlspecialchars($m['phone'] ?? '-') ?></td>
-                        <td><?= htmlspecialchars($m['email'] ?? '-') ?></td>
                         <td><?= ucfirst($m['status']) ?></td>
                     </tr>
                 <?php endforeach; ?>

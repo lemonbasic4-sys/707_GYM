@@ -81,17 +81,19 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     </div>
 </div>
 
-<form method="GET" class="filter-bar">
-    <input type="search" name="search" placeholder="Search..." value="<?= sanitize($search) ?>">
+<form method="GET" class="filter-bar payments-filter-bar payments-history-filter-bar">
+    <input type="search" name="search" placeholder="Search member, txn..." value="<?= sanitize($search) ?>">
     <select name="method">
         <option value="">All Methods</option>
-        <option value="cash">Cash</option>
-        <option value="gcash">GCash</option>
-        <option value="bank_transfer">Bank Transfer</option>
-        <option value="card">Card</option>
+        <option value="cash"          <?= $method==='cash'?'selected':'' ?>>Cash</option>
+        <option value="gcash"         <?= $method==='gcash'?'selected':'' ?>>GCash</option>
+        <option value="bank_transfer" <?= $method==='bank_transfer'?'selected':'' ?>>Bank Transfer</option>
+        <option value="card"          <?= $method==='card'?'selected':'' ?>>Card</option>
     </select>
-    <input type="date" name="date_from" value="<?= sanitize($dateFrom) ?>">
-    <input type="date" name="date_to"   value="<?= sanitize($dateTo) ?>">
+    <div class="payments-date-range">
+        <label>From<input type="date" name="date_from" value="<?= sanitize($dateFrom) ?>"></label>
+        <label>To<input type="date" name="date_to" value="<?= sanitize($dateTo) ?>"></label>
+    </div>
     <button type="submit" class="btn btn-secondary">Filter</button>
     <a href="<?= BASE_URL ?>/pages/payments/history.php" class="btn btn-ghost">Clear</a>
 </form>
@@ -101,7 +103,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <div class="empty-state"><i data-lucide="dollar-sign"></i><h3>No payments found</h3></div>
     <?php else: ?>
     <div class="table-wrapper">
-        <table>
+        <table class="payments-table">
             <thead>
                 <tr><th>Txn ID</th><th>Type</th><th>Member</th><th>Plan</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th></tr>
             </thead>
@@ -121,7 +123,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </tbody>
         </table>
     </div>
-    <div style="padding:12px 16px; border-top:1px solid var(--border); text-align:right;">
+    <div class="payments-total-row">
         <strong>Total: <?= formatPhilippineCurrency((float)$totalAmount) ?></strong>
     </div>
     <?php if ($pagination['total_pages'] > 1): ?>

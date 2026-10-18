@@ -14,9 +14,8 @@ $db = Database::getConnection();
 
 // Recent imports
 $recentImports = $db->query(
-    "SELECT il.*, a.name AS admin_name
+    "SELECT il.*
      FROM import_logs il
-     LEFT JOIN admins a ON il.imported_by = a.id
      ORDER BY il.created_at DESC LIMIT 10"
 )->fetchAll();
 
@@ -33,12 +32,15 @@ require_once __DIR__ . '/../../includes/header.php';
 require_once __DIR__ . '/../../includes/sidebar.php';
 ?>
 
-<div class="page-header">
+<div class="page-header imports-page-header">
     <div class="page-header-left">
         <h1>CSV Import</h1>
         <p>Import data from CSV files exported from other systems.</p>
     </div>
-    <div class="page-header-actions">
+    <div class="page-header-actions imports-page-actions">
+        <a href="<?= BASE_URL ?>/pages/analytics/branches.php" class="btn btn-secondary">
+            <i data-lucide="git-compare-arrows"></i> Branch Analytics
+        </a>
         <a href="<?= BASE_URL ?>/pages/imports/history.php" class="btn btn-secondary">
             <i data-lucide="history"></i> Import History
         </a>
@@ -46,7 +48,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 </div>
 
 <!-- Import Type Cards -->
-<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:16px; margin-bottom:28px;">
+<div class="imports-type-grid">
     <?php
     $importTypes = [
         'members'      => ['icon'=>'users',       'label'=>'Members',      'desc'=>'Import member profiles'],
@@ -57,22 +59,22 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     foreach ($importTypes as $type => $info):
         $last = $lastImports[$type];
     ?>
-    <div class="card" style="display:flex;flex-direction:column;gap:12px;">
-        <div style="display:flex;align-items:center;gap:12px;">
-            <div class="kpi-icon"><i data-lucide="<?= $info['icon'] ?>"></i></div>
+    <div class="card imports-type-card">
+        <div class="imports-type-heading">
+            <div class="kpi-icon imports-type-icon"><i data-lucide="<?= $info['icon'] ?>"></i></div>
             <div>
-                <div class="card-title"><?= $info['label'] ?></div>
-                <div class="text-muted" style="font-size:13px;"><?= $info['desc'] ?></div>
+                <h2 class="card-title"><?= $info['label'] ?></h2>
+                <p class="text-muted imports-type-description"><?= $info['desc'] ?></p>
             </div>
         </div>
         <?php if ($last): ?>
-        <p style="font-size:12px; color:var(--muted);">
+        <p class="imports-type-status">
             Last import: <?= timeAgo($last['created_at']) ?> &bull; <?= number_format((int)$last['imported']) ?> records
         </p>
         <?php else: ?>
-        <p style="font-size:12px; color:var(--muted);">No previous imports.</p>
+        <p class="imports-type-status">No previous imports.</p>
         <?php endif; ?>
-        <a href="<?= BASE_URL ?>/pages/imports/upload.php?type=<?= $type ?>" class="btn btn-primary btn-sm" style="align-self:flex-start;">
+        <a href="<?= BASE_URL ?>/pages/imports/upload.php?type=<?= $type ?>" class="btn btn-primary btn-sm imports-type-action">
             <i data-lucide="upload"></i> Import <?= $info['label'] ?>
         </a>
     </div>
@@ -80,7 +82,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 </div>
 
 <!-- Recent Imports Table -->
-<div class="card">
+<div class="card imports-history-card">
     <div class="card-header">
         <span class="card-title">Recent Imports</span>
     </div>
@@ -102,7 +104,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <td><?= (int)$imp['updated'] ?></td>
                     <td class="text-muted"><?= (int)$imp['skipped'] ?></td>
                     <td class="text-danger"><?= (int)$imp['errors'] ?></td>
-                    <td><?= sanitize($imp['admin_name'] ?? '—') ?></td>
+                    <td><?= sanitize(ADMIN_DISPLAY_NAME) ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>

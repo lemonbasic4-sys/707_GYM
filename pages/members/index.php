@@ -27,11 +27,10 @@ $where  = ['1=1'];
 $params = [];
 
 if ($search !== '') {
-    $where[]  = "(m.first_name LIKE :first_name OR m.last_name LIKE :last_name OR m.email LIKE :email OR m.phone LIKE :phone)";
+    $where[]  = "(m.first_name LIKE :first_name OR m.last_name LIKE :last_name OR m.phone LIKE :phone)";
     $searchTerm = "%{$search}%";
     $params[':first_name'] = $searchTerm;
     $params[':last_name'] = $searchTerm;
-    $params[':email'] = $searchTerm;
     $params[':phone'] = $searchTerm;
 }
 if (in_array($status, ['active', 'archived'], true)) {
@@ -50,7 +49,7 @@ $pagination = getPaginationData($totalItems, $page, DEFAULT_PER_PAGE);
 
 // ── Fetch Members ─────────────────────────────────────────────────────────────
 $stmt = $db->prepare(
-    "SELECT m.id, m.first_name, m.last_name, m.email, m.phone,
+    "SELECT m.id, m.first_name, m.last_name, m.phone,
             m.status, m.created_at,
             ms.status AS membership_status,
             ms.end_date
@@ -89,7 +88,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <!-- Filters -->
 <form method="GET" action="" class="filter-bar">
-    <input type="search" name="search" placeholder="Search name, email, phone..."
+    <input type="search" name="search" placeholder="Search name or phone..."
            value="<?= sanitize($search) ?>">
     <select name="status">
         <option value="">All Statuses</option>
