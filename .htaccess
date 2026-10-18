@@ -1,0 +1,21 @@
+# Prevent directory listings
+Options -Indexes
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Protect sensitive system and config files
+<FilesMatch "^\.|\.(sql|json|lock|md|log)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Protect config & database directory from direct browser access
+RewriteEngine On
+RewriteRule ^config/ - [F,L]
+RewriteRule ^database/ - [F,L]
