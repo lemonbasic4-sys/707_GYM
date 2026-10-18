@@ -12,19 +12,17 @@ DELETE FROM `activity_logs`;
 DELETE FROM `members`;
 DELETE FROM `membership_plans`;
 
-INSERT INTO `admins` (`id`, `username`, `password`, `last_login`, `created_at`)
-VALUES (1, 'admin', '$2y$10$HOv7BsuocpSg7h2IFlyeUOllgxyvTCGRJpa4PMRojedG3x4uVzRMq', NULL, NOW())
-ON DUPLICATE KEY UPDATE `username` = VALUES(`username`), `password` = VALUES(`password`), `last_login` = NULL;
-INSERT INTO `branch_analytics_settings` (`id`, `branch_name`)
-VALUES (1, '707_GYM_1')
-ON DUPLICATE KEY UPDATE `branch_name` = VALUES(`branch_name`);
+REPLACE INTO `admins` (`id`, `username`, `password`, `last_login`, `created_at`)
+VALUES (1, 'admin', '$2y$10$HOv7BsuocpSg7h2IFlyeUOllgxyvTCGRJpa4PMRojedG3x4uVzRMq', NULL, NOW());
+REPLACE INTO `branch_analytics_settings` (`id`, `branch_name`)
+VALUES (1, '707_GYM_1');
 
-INSERT INTO `membership_plans` (`id`, `name`, `description`, `duration_days`, `price`, `status`) VALUES
+REPLACE INTO `membership_plans` (`id`, `name`, `description`, `duration_days`, `price`, `status`) VALUES
 (1, 'Monthly Unlimited', 'Full gym access for 30 days', 30, 800.00, 'active'),
 (2, 'Quarterly Advantage', 'Full gym access for 90 days', 90, 2200.00, 'active'),
 (3, 'Annual VIP Membership', 'Full gym access for one year', 365, 7500.00, 'active');
 
-INSERT INTO `members`
+REPLACE INTO `members`
     (`id`, `first_name`, `last_name`, `phone`, `gender`, `date_of_birth`, `photo`,
      `emergency_contact_name`, `emergency_contact_phone`, `status`, `created_at`, `updated_at`)
 VALUES
@@ -37,7 +35,7 @@ VALUES
 (7, 'Marco', 'Dizon', '0917-221-1007', 'male', '1995-01-09', NULL, 'Nora Dizon', '0917-221-2007', 'active', '2026-10-10 09:00:00', NOW()),
 (8, 'Celine', 'Flores', '0917-221-1008', 'female', '1993-09-16', NULL, 'Rico Flores', '0917-221-2008', 'active', '2026-07-25 09:00:00', NOW());
 
-INSERT INTO `memberships`
+REPLACE INTO `memberships`
     (`id`, `member_id`, `plan_id`, `start_date`, `end_date`, `status`, `created_at`, `updated_at`)
 VALUES
 (1, 1, 1, '2026-07-02', '2026-08-01', 'expired', '2026-07-02 09:00:00', NOW()),
@@ -54,7 +52,7 @@ VALUES
 (12, 7, 1, '2026-10-10', '2026-11-09', 'active', '2026-10-10 09:00:00', NOW()),
 (13, 8, 3, '2026-07-25', '2027-07-25', 'active', '2026-07-25 09:00:00', NOW());
 
-INSERT INTO `payments`
+REPLACE INTO `payments`
     (`transaction_id`, `transaction_type`, `member_id`, `membership_id`, `amount`,
      `payment_method`, `notes`, `recorded_by`, `payment_date`, `status`, `created_at`)
 VALUES
@@ -72,7 +70,7 @@ VALUES
 ('TXN-B1-M-0012', 'membership_renewal', 7, 12, 800.00, 'cash', 'Monthly activation', 1, '2026-10-10', 'paid', '2026-10-10 09:00:00'),
 ('TXN-B1-M-0013', 'membership_renewal', 8, 13, 7500.00, 'card', 'Annual activation', 1, '2026-07-25', 'paid', '2026-07-25 09:00:00');
 
-INSERT INTO `payments`
+REPLACE INTO `payments`
     (`transaction_id`, `transaction_type`, `member_id`, `membership_id`, `amount`,
      `payment_method`, `notes`, `recorded_by`, `payment_date`, `status`, `created_at`)
 SELECT CONCAT('TXN-B1-W-', DATE_FORMAT(w.visit_date, '%Y%m%d')), 'walk_in_pass',
@@ -92,7 +90,7 @@ FROM (
 WHERE w.day_offset <= DATEDIFF(CURDATE(), '2026-07-01')
   AND w.day_offset MOD 3 = 1;
 
-INSERT INTO `attendance` (`member_id`, `check_in`, `check_out`, `date`, `created_at`)
+REPLACE INTO `attendance` (`member_id`, `check_in`, `check_out`, `date`, `created_at`)
 SELECT a.member_id, a.check_in,
        IF(a.visit_date = CURDATE() AND a.slot_no = 0, NULL,
           DATE_ADD(a.check_in, INTERVAL (50 + a.day_offset MOD 100) MINUTE)),
