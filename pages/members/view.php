@@ -113,8 +113,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-bottom:24px;">
     <div class="card" style="text-align:center;">
         <?php if ($member['photo']): ?>
-        <img src="<?= UPLOAD_URL . '/' . sanitize($member['photo']) ?>"
-             alt="Member photo" style="width:120px;height:120px;border-radius:50%;object-fit:cover;margin:0 auto 16px;border:3px solid var(--accent);">
+        <?php $photoUrl = UPLOAD_URL . '/' . sanitize($member['photo']); ?>
+        <img src="<?= $photoUrl ?>"
+             id="memberProfilePhoto"
+             alt="Member photo"
+             title="Click to view full screen"
+             style="width:120px;height:120px;border-radius:50%;object-fit:cover;margin:0 auto 16px;border:3px solid var(--accent);cursor:zoom-in;transition:transform 0.15s,box-shadow 0.15s;"
+             onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 0 0 4px rgba(255,77,0,0.25)'"
+             onmouseout="this.style.transform='';this.style.boxShadow=''"
+             onclick="openPhotoFullscreen()">
         <?php else: ?>
         <div style="width:120px;height:120px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:42px;font-weight:700;color:#fff;">
             <?= getInitials($member['first_name'] . ' ' . $member['last_name']) ?>
@@ -229,6 +236,56 @@ function switchTab(btn, panelId) {
     btn.classList.add('active');
     document.getElementById(panelId).classList.add('active');
 }
+
+<?php if ($member['photo']): ?>
+function openPhotoFullscreen() {
+    const ov = document.getElementById('photoFullscreenOverlay');
+    ov.style.display = 'flex';
+    /* tiny delay lets the browser paint display:flex before transitioning opacity */
+    requestAnimationFrame(() => requestAnimationFrame(() => { ov.style.opacity = '1'; }));
+    document.body.style.overflow = 'hidden';
+}
+function closePhotoFullscreen() {
+    const ov = document.getElementById('photoFullscreenOverlay');
+    ov.style.opacity = '0';
+    ov.addEventListener('transitionend', () => { ov.style.display = 'none'; }, { once: true });
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePhotoFullscreen(); });
+<?php endif; ?>
 </script>
+
+<?php if ($member['photo']): ?>
+<!-- ── Fullscreen Photo Overlay ───────────────────────────── -->
+<div id="photoFullscreenOverlay"
+     onclick="if(event.target===this)closePhotoFullscreen()"
+     style="display:none; opacity:0; transition:opacity 0.22s ease;
+            position:fixed; inset:0; z-index:9999;
+            background:rgba(0,0,0,0.95);
+            align-items:center; justify-content:center;
+            flex-direction:column; gap:14px;">
+
+    <!-- Close button -->
+    <button onclick="closePhotoFullscreen()" title="Close (Esc)"
+            style="position:absolute;top:18px;right:22px;
+                   background:rgba(255,255,255,0.1);border:none;border-radius:50%;
+                   color:#fff;cursor:pointer;width:40px;height:40px;
+                   font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;
+                   transition:background 0.15s;"
+            onmouseover="this.style.background='rgba(255,255,255,0.22)'"
+            onmouseout="this.style.background='rgba(255,255,255,0.1)'">&#x2715;</button>
+
+    <!-- Full-resolution image -->
+    <img src="<?= $photoUrl ?>"
+         alt="<?= sanitize($member['first_name'] . ' ' . $member['last_name']) ?>"
+         style="max-width:90vw; max-height:85vh; object-fit:contain;
+                border-radius:8px; box-shadow:0 12px 48px rgba(0,0,0,0.8);">
+
+    <!-- Name caption -->
+    <p style="color:rgba(255,255,255,0.7); font-size:13px; margin:0; letter-spacing:0.3px;">
+        <?= sanitize($member['first_name'] . ' ' . $member['last_name']) ?>
+    </p>
+</div>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

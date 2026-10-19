@@ -15,12 +15,12 @@ $db = Database::getConnection();
 // ── Filters ──────────────────────────────────────────────────────────────────
 $search    = trim($_GET['search']   ?? '');
 $status    = $_GET['status']        ?? '';
-$sort      = $_GET['sort']          ?? 'created_at';
-$dir       = strtoupper($_GET['dir'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';
+$sort      = $_GET['sort']          ?? 'first_name';
+$dir       = strtoupper($_GET['dir'] ?? 'ASC') === 'ASC' ? 'ASC' : 'DESC';
 $page      = max(1, (int) ($_GET['page'] ?? 1));
 
-$allowedSorts = ['first_name', 'created_at'];
-if (!in_array($sort, $allowedSorts, true)) $sort = 'created_at';
+$allowedSorts = ['first_name', 'last_name', 'created_at'];
+if (!in_array($sort, $allowedSorts, true)) $sort = 'first_name';
 
 // ── Build WHERE ───────────────────────────────────────────────────────────────
 $where  = ['1=1'];
@@ -49,7 +49,7 @@ $pagination = getPaginationData($totalItems, $page, DEFAULT_PER_PAGE);
 
 // ── Fetch Members ─────────────────────────────────────────────────────────────
 $stmt = $db->prepare(
-    "SELECT m.id, m.first_name, m.last_name, m.phone,
+    "SELECT m.id, m.first_name, m.last_name, m.phone, m.photo,
             m.status, m.created_at,
             ms.status AS membership_status,
             ms.end_date
@@ -112,6 +112,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <table id="membersTable">
             <thead>
                 <tr>
+                    <th style="width:44px;"></th><!-- avatar col -->
                     <th>Name</th>
                     <th>Phone</th>
                     <th>Membership</th>
@@ -122,10 +123,31 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </thead>
             <tbody>
                 <?php foreach ($members as $m): ?>
+                <?php
+                    $fullName  = sanitize($m['first_name'] . ' ' . $m['last_name']);
+                    $initials  = strtoupper(substr($m['first_name'], 0, 1) . substr($m['last_name'], 0, 1));
+                    $photoUrl  = $m['photo'] ? UPLOAD_URL . '/' . sanitize($m['photo']) : null;
+                    $profileUrl = BASE_URL . '/pages/members/view.php?id=' . (int)$m['id'];
+                ?>
                 <tr>
+                    <!-- Avatar -->
+                    <td style="padding-right:0;">
+                        <?php if ($photoUrl): ?>
+                        <img src="<?= $photoUrl ?>" alt="<?= $fullName ?>"
+                             class="member-list-avatar"
+                             data-photo="<?= $photoUrl ?>"
+                             data-name="<?= $fullName ?>"
+                             title="View photo">
+                        <?php else: ?>
+                        <div class="member-list-initials" title="<?= $fullName ?>">
+                            <?= $initials ?>
+                        </div>
+                        <?php endif; ?>
+                    </td>
+                    <!-- Name -->
                     <td>
-                        <a href="<?= BASE_URL ?>/pages/members/view.php?id=<?= (int)$m['id'] ?>">
-                            <?= sanitize($m['first_name'] . ' ' . $m['last_name']) ?>
+                        <a href="<?= $profileUrl ?>">
+                            <?= $fullName ?>
                         </a>
                     </td>
                     <td><?= sanitize($m['phone'] ?? '—') ?></td>
@@ -146,7 +168,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </td>
                     <td>
                         <div class="table-actions">
-                            <a href="<?= BASE_URL ?>/pages/members/view.php?id=<?= (int)$m['id'] ?>" class="btn btn-ghost btn-sm" title="View">
+                            <a href="<?= $profileUrl ?>" class="btn btn-ghost btn-sm" title="View">
                                 <i data-lucide="eye"></i>
                             </a>
                             <a href="<?= BASE_URL ?>/pages/members/edit.php?id=<?= (int)$m['id'] ?>" class="btn btn-secondary btn-sm" title="Edit">
@@ -184,4 +206,80 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <?php endif; ?>
 </div>
 
+<!-- ── Photo Lightbox ─────────────────────────────────────── -->
+<div class="modal-overlay" id="photoLightbox" role="dialog" aria-modal="true" aria-label="Member photo">
+    <div class="modal" style="max-width:400px; text-align:center; padding:20px;">
+        <div class="modal-header" style="margin-bottom:14px;">
+            <span class="modal-title" id="lightboxName"></span>
+            <button class="modal-close" id="lightboxClose" type="button" aria-label="Close">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <img id="lightboxImg" src="" alt=""
+             style="width:100%; max-height:360px; object-fit:contain; border-radius:var(--radius-sm);">
+        <div style="margin-top:14px;">
+            <a id="lightboxProfileLink" href="#" class="btn btn-primary btn-sm">
+                <i data-lucide="user"></i> View Profile
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ── Member list avatar ── */
+.member-list-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+    display: block;
+}
+.member-list-avatar:hover {
+    border-color: var(--accent);
+    transform: scale(1.08);
+}
+.member-list-initials {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(255,77,0,0.13);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255,77,0,0.2);
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+</style>
+
+<script>
+/* ── Photo Lightbox ─────────────────────────────────────── */
+(function () {
+    const overlay    = document.getElementById('photoLightbox');
+    const img        = document.getElementById('lightboxImg');
+    const nameEl     = document.getElementById('lightboxName');
+    const closeBtn   = document.getElementById('lightboxClose');
+    const profileLnk = document.getElementById('lightboxProfileLink');
+
+    document.querySelectorAll('.member-list-avatar').forEach(avatar => {
+        avatar.addEventListener('click', () => {
+            img.src          = avatar.dataset.photo;
+            nameEl.textContent = avatar.dataset.name;
+            // find the profile link from the same row
+            const row = avatar.closest('tr');
+            const profileHref = row?.querySelector('a[href*="view.php"]')?.getAttribute('href') ?? '#';
+            profileLnk.href  = profileHref;
+            openModal('photoLightbox');
+        });
+    });
+
+    closeBtn.addEventListener('click', () => closeModal('photoLightbox'));
+})();
+</script>
+
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>
+
