@@ -39,6 +39,49 @@ if ($type === 'branch_analytics') {
     exit;
 }
 
+if ($type === 'branch_data') {
+    if (!hasBranchAnalyticsSchema($pdo)) {
+        http_response_code(503);
+        exit('Apply the branch analytics migration before exporting branch data.');
+    }
+    $branchName = getLocalBranchName($pdo);
+    $capturedAt = date('Y-m-d H:i:s');
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $branchName . '_' . date('Ymd_His') . '_data.csv"');
+    $output = fopen('php://output', 'w');
+    if ($output === false) {
+        throw new RuntimeException('Unable to create branch data export.');
+    }
+
+    fputcsv($output, ['record_type', 'branch_name', 'captured_at', 'record_id', 'payload_json']);
+    fputcsv($output, [
+        'manifest', $branchName, $capturedAt, 'manifest',
+        json_encode(['format_version' => 1], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+    ]);
+
+    $exportTables = [
+        'members' => "SELECT id, first_name, last_name, phone, gender, date_of_birth, status, created_at, updated_at FROM members ORDER BY id",
+        'membership_plans' => "SELECT id, name, description, duration_days, price, status, created_at FROM membership_plans ORDER BY id",
+        'memberships' => "SELECT id, member_id, plan_id, start_date, end_date, status, created_at, updated_at FROM memberships ORDER BY id",
+        'attendance' => "SELECT id, member_id, check_in, check_out, date, created_at FROM attendance ORDER BY id",
+        'payments' => "SELECT id, transaction_id, transaction_type, member_id, membership_id, amount, payment_method, notes, payment_date, status, created_at FROM payments ORDER BY id",
+    ];
+    foreach ($exportTables as $recordType => $query) {
+        $records = $pdo->query($query);
+        while ($record = $records->fetch(PDO::FETCH_ASSOC)) {
+            fputcsv($output, [
+                $recordType,
+                $branchName,
+                $capturedAt,
+                (string) $record['id'],
+                json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            ]);
+        }
+    }
+    fclose($output);
+    exit;
+}
+
 $vendorAutoload = BASE_PATH . '/vendor/autoload.php';
 $hasSpreadsheet = file_exists($vendorAutoload);
 

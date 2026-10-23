@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/session.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/csrf.php';
 
 requireAuth();
 
@@ -19,14 +20,6 @@ $recentImports = $db->query(
      ORDER BY il.created_at DESC LIMIT 10"
 )->fetchAll();
 
-// Last import per type
-$lastImports = [];
-foreach (['members','memberships','attendance','payments'] as $type) {
-    $row = $db->prepare("SELECT created_at, total_rows, imported FROM import_logs WHERE import_type=:t ORDER BY created_at DESC LIMIT 1");
-    $row->execute([':t' => $type]);
-    $lastImports[$type] = $row->fetch();
-}
-
 $pageTitle = 'CSV Import';
 require_once __DIR__ . '/../../includes/header.php';
 require_once __DIR__ . '/../../includes/sidebar.php';
@@ -34,8 +27,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <div class="page-header imports-page-header">
     <div class="page-header-left">
-        <h1>CSV Import</h1>
-        <p>Import data from CSV files exported from other systems.</p>
+        <h1>Branch Data Transfer</h1>
+        <p>Export or import all branch data with one CSV file.</p>
     </div>
     <div class="page-header-actions imports-page-actions">
         <a href="<?= BASE_URL ?>/pages/analytics/branches.php" class="btn btn-secondary">
@@ -47,39 +40,44 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     </div>
 </div>
 
-<!-- Import Type Cards -->
-<div class="imports-type-grid">
-    <?php
-    $importTypes = [
-        'members'      => ['icon'=>'users',       'label'=>'Members',      'desc'=>'Import member profiles'],
-        'memberships'  => ['icon'=>'credit-card', 'label'=>'Memberships',  'desc'=>'Import membership records'],
-        'attendance'   => ['icon'=>'calendar-check','label'=>'Attendance', 'desc'=>'Import check-in records'],
-        'payments'     => ['icon'=>'dollar-sign', 'label'=>'Payments',     'desc'=>'Import payment history'],
-    ];
-    foreach ($importTypes as $type => $info):
-        $last = $lastImports[$type];
-    ?>
-    <div class="card imports-type-card">
-        <div class="imports-type-heading">
-            <div class="kpi-icon imports-type-icon"><i data-lucide="<?= $info['icon'] ?>"></i></div>
+<section class="branch-setup-grid imports-branch-transfer">
+    <article class="card branch-setup-card">
+        <div class="branch-card-heading">
+            <span class="branch-card-icon"><i data-lucide="database"></i></span>
             <div>
-                <h2 class="card-title"><?= $info['label'] ?></h2>
-                <p class="text-muted imports-type-description"><?= $info['desc'] ?></p>
+                <h2>Export everything</h2>
+                <p>Download one CSV with members, plans, memberships, attendance, and payments.</p>
             </div>
         </div>
-        <?php if ($last): ?>
-        <p class="imports-type-status">
-            Last import: <?= timeAgo($last['created_at']) ?> &bull; <?= number_format((int)$last['imported']) ?> records
-        </p>
-        <?php else: ?>
-        <p class="imports-type-status">No previous imports.</p>
-        <?php endif; ?>
-        <a href="<?= BASE_URL ?>/pages/imports/upload.php?type=<?= $type ?>" class="btn btn-primary btn-sm imports-type-action">
-            <i data-lucide="upload"></i> Import <?= $info['label'] ?>
+        <div class="branch-setup-hint"><i data-lucide="shield"></i><span>Export from each branch, then import the other branches’ files on the system used for combined analytics. Give each installation a unique name in Branch Analytics first.</span></div>
+        <a href="<?= BASE_URL ?>/exports/excel.php?type=branch_data" class="btn btn-primary">
+            <i data-lucide="download"></i> Export All Branch Data
         </a>
-    </div>
-    <?php endforeach; ?>
-</div>
+    </article>
+
+    <article class="card branch-setup-card">
+        <div class="branch-card-heading">
+            <span class="branch-card-icon"><i data-lucide="file-up"></i></span>
+            <div>
+                <h2>Import everything</h2>
+                <p>Import one or more branch CSV exports together.</p>
+            </div>
+        </div>
+        <div class="branch-setup-hint"><i data-lucide="refresh-cw"></i><span>Import files from other branches only. Records stay separate by branch; importing the same branch again replaces its previous copy.</span></div>
+        <form method="POST" action="<?= BASE_URL ?>/pages/analytics/branches.php" enctype="multipart/form-data" class="branch-import-form">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="import_branch_data">
+            <input type="hidden" name="return_to" value="imports">
+            <input type="hidden" name="month" value="<?= date('Y-m') ?>">
+            <label class="branch-file-input">
+                <i data-lucide="file-spreadsheet"></i>
+                <span><strong>Choose branch CSV files</strong><small>One or more files · up to 15 MB each</small></span>
+                <input type="file" name="csv_files[]" accept=".csv,text/csv" multiple required>
+            </label>
+            <button type="submit" class="btn btn-primary"><i data-lucide="upload"></i> Import All Branch Data</button>
+        </form>
+    </article>
+</section>
 
 <!-- Recent Imports Table -->
 <div class="card imports-history-card">

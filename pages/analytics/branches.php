@@ -80,6 +80,167 @@ function parseBranchAnalyticsCsv(array $file, string $localBranch): array
     return $snapshot + ['source_file' => substr(basename($file['name']), 0, 255)];
 }
 
+function parseBranchDataCsv(array $file, string $localBranch): array
+{
+    if (!isset($file['error'], $file['size'], $file['name'], $file['tmp_name'])
+        || !is_int($file['error']) || !is_int($file['size'])
+        || !is_string($file['name']) || !is_string($file['tmp_name'])
+        || $file['error'] !== UPLOAD_ERR_OK || $file['size'] <= 0 || $file['size'] > MAX_BRANCH_DATA_FILE_SIZE) {
+        throw new InvalidArgumentException('Each branch data CSV must be readable and no larger than 15 MB.');
+    }
+    if (strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) !== 'csv') {
+        throw new InvalidArgumentException('Branch data imports must be CSV files.');
+    }
+
+    $handle = fopen($file['tmp_name'], 'r');
+    if ($handle === false) {
+        throw new InvalidArgumentException('A selected branch data CSV could not be read.');
+    }
+
+    $headers = fgetcsv($handle, null, ',', '"', '\\');
+    if (is_array($headers) && isset($headers[0])) {
+        $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $headers[0]);
+    }
+    $expectedHeaders = ['record_type', 'branch_name', 'captured_at', 'record_id', 'payload_json'];
+    if (!is_array($headers) || array_map('strtolower', array_map('trim', $headers)) !== $expectedHeaders) {
+        fclose($handle);
+        throw new InvalidArgumentException('A selected file is not a valid 707 GYM full branch data CSV.');
+    }
+
+    $allowedTypes = ['members', 'membership_plans', 'memberships', 'attendance', 'payments'];
+    $data = array_fill_keys($allowedTypes, []);
+    $branchName = null;
+    $capturedAt = null;
+    $manifestSeen = false;
+    $seenIds = array_fill_keys($allowedTypes, []);
+    $line = 1;
+    while (($row = fgetcsv($handle, null, ',', '"', '\\')) !== false) {
+        $line++;
+        if (count($row) !== count($expectedHeaders)) {
+            fclose($handle);
+            throw new InvalidArgumentException("Invalid CSV row {$line}.");
+        }
+        [$recordType, $rowBranch, $rowCapturedAt, $recordId, $payloadJson] = array_map('trim', $row);
+        if ($branchName === null) {
+            $branchName = $rowBranch;
+            $capturedAt = $rowCapturedAt;
+        }
+        if ($rowBranch !== $branchName || $rowCapturedAt !== $capturedAt) {
+            fclose($handle);
+            throw new InvalidArgumentException('A branch data file must contain one branch and one export time only.');
+        }
+        $payload = json_decode($payloadJson, true);
+        if (!is_array($payload)) {
+            fclose($handle);
+            throw new InvalidArgumentException("Invalid record data on CSV row {$line}.");
+        }
+        if ($recordType === 'manifest') {
+            if ($manifestSeen || $line !== 2 || $recordId !== 'manifest' || ($payload['format_version'] ?? null) !== 1) {
+                fclose($handle);
+                throw new InvalidArgumentException('The branch data CSV manifest is invalid.');
+            }
+            $manifestSeen = true;
+            continue;
+        }
+        if (!in_array($recordType, $allowedTypes, true)
+            || !ctype_digit($recordId)
+            || (int) $recordId < 1
+            || (int) ($payload['id'] ?? 0) !== (int) $recordId
+            || isset($seenIds[$recordType][$recordId])) {
+            fclose($handle);
+            throw new InvalidArgumentException("Invalid or duplicate record on CSV row {$line}.");
+        }
+        $seenIds[$recordType][$recordId] = true;
+        $data[$recordType][] = $payload;
+    }
+    fclose($handle);
+
+    $captured = is_string($capturedAt) ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $capturedAt) : false;
+    $dateErrors = DateTimeImmutable::getLastErrors();
+    $validCapturedAt = $captured !== false
+        && ($dateErrors === false || ($dateErrors['warning_count'] === 0 && $dateErrors['error_count'] === 0))
+        && $captured->format('Y-m-d H:i:s') === $capturedAt;
+    if (!$manifestSeen || !is_string($branchName) || !$validCapturedAt) {
+        throw new InvalidArgumentException('This branch data file has an invalid manifest or export time. Export a fresh file from Branch Data Transfer and try again.');
+    }
+    if (!isValidBranchName($branchName)) {
+        throw new InvalidArgumentException('The CSV branch name is invalid. Set a unique branch name in Branch Analytics, then export again.');
+    }
+    if ($branchName === $localBranch) {
+        throw new InvalidArgumentException(
+            "This file is from {$branchName}, which is the current branch. Import a CSV exported by another branch. Make sure every installation has its own branch name in Branch Analytics."
+        );
+    }
+
+    $requiredFields = [
+        'members' => ['id', 'first_name', 'last_name', 'status', 'created_at'],
+        'membership_plans' => ['id', 'name', 'duration_days', 'price', 'status'],
+        'memberships' => ['id', 'member_id', 'plan_id', 'start_date', 'end_date', 'status'],
+        'attendance' => ['id', 'member_id', 'check_in', 'date'],
+        'payments' => ['id', 'transaction_id', 'transaction_type', 'member_id', 'amount', 'payment_method', 'payment_date', 'status'],
+    ];
+    foreach ($data as $recordType => $records) {
+        foreach ($records as $record) {
+            foreach ($requiredFields[$recordType] as $field) {
+                if (!array_key_exists($field, $record)) {
+                    throw new InvalidArgumentException("A {$recordType} record is missing its {$field} field.");
+                }
+            }
+            if ($recordType === 'members' && !in_array($record['status'], ['active', 'archived'], true)) {
+                throw new InvalidArgumentException('A member record has an invalid status.');
+            }
+            if ($recordType === 'membership_plans'
+                && (!in_array($record['status'], ['active', 'inactive'], true)
+                    || filter_var($record['duration_days'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false
+                    || !is_numeric($record['price']) || !is_finite((float) $record['price']) || (float) $record['price'] < 0)) {
+                throw new InvalidArgumentException('A membership plan has invalid duration, price, or status.');
+            }
+            if ($recordType === 'memberships' && !in_array($record['status'], ['active', 'expired', 'inactive'], true)) {
+                throw new InvalidArgumentException('A membership record has an invalid status.');
+            }
+            if ($recordType === 'payments'
+                && (!in_array($record['status'], ['paid', 'partial', 'unpaid'], true)
+                    || !in_array($record['payment_method'], ['cash', 'gcash', 'bank_transfer', 'card'], true)
+                    || !is_numeric($record['amount']) || !is_finite((float) $record['amount']) || (float) $record['amount'] < 0)) {
+                throw new InvalidArgumentException('A payment record has an invalid amount, method, or status.');
+            }
+        }
+    }
+
+    $memberIds = array_fill_keys(array_map(static fn(array $row): int => (int) $row['id'], $data['members']), true);
+    $planIds = array_fill_keys(array_map(static fn(array $row): int => (int) $row['id'], $data['membership_plans']), true);
+    $membershipIds = array_fill_keys(array_map(static fn(array $row): int => (int) $row['id'], $data['memberships']), true);
+    foreach ($data['memberships'] as $membership) {
+        if (!isset($memberIds[(int) ($membership['member_id'] ?? 0)])
+            || !isset($planIds[(int) ($membership['plan_id'] ?? 0)])) {
+            throw new InvalidArgumentException('Membership records must refer to members and plans in the same branch CSV.');
+        }
+    }
+    foreach ($data['attendance'] as $attendance) {
+        if (!isset($memberIds[(int) ($attendance['member_id'] ?? 0)])) {
+            throw new InvalidArgumentException('Attendance records must refer to members in the same branch CSV.');
+        }
+    }
+    $transactionIds = [];
+    foreach ($data['payments'] as $payment) {
+        if (!isset($memberIds[(int) ($payment['member_id'] ?? 0)])
+            || (!empty($payment['membership_id']) && !isset($membershipIds[(int) $payment['membership_id']]))) {
+            throw new InvalidArgumentException('Payment records must refer to members and memberships in the same branch CSV.');
+        }
+        if (isset($transactionIds[$payment['transaction_id']])) {
+            throw new InvalidArgumentException('Payment transaction IDs must be unique within a branch CSV.');
+        }
+        $transactionIds[$payment['transaction_id']] = true;
+    }
+
+    return [
+        'branch_name' => $branchName,
+        'exported_at' => $capturedAt,
+        'source_file' => substr(basename($file['name']), 0, 255),
+        'data' => $data,
+    ];
+}
+
 if (!hasBranchAnalyticsSchema($db)) {
     require_once BASE_PATH . '/includes/header.php';
     require_once BASE_PATH . '/includes/sidebar.php';
@@ -97,6 +258,7 @@ if (!hasBranchAnalyticsSchema($db)) {
     require_once BASE_PATH . '/includes/footer.php';
     exit;
 }
+$hasBranchDataSchema = hasBranchDataSnapshotsSchema($db);
 
 $month = isset($_GET['month']) && is_string($_GET['month']) ? $_GET['month'] : date('Y-m');
 $view = isset($_GET['view']) && is_string($_GET['view']) ? $_GET['view'] : 'compare';
@@ -123,7 +285,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($branchName !== getLocalBranchName($db)) {
             $existing = $db->prepare("SELECT COUNT(*) FROM branch_analytics_snapshots WHERE branch_name = :branch_name");
             $existing->execute([':branch_name' => $branchName]);
-            if ((int) $existing->fetchColumn() > 0) {
+            $hasSavedData = false;
+            if ($hasBranchDataSchema) {
+                $dataCheck = $db->prepare("SELECT COUNT(*) FROM branch_data_snapshots WHERE branch_name = :branch_name");
+                $dataCheck->execute([':branch_name' => $branchName]);
+                $hasSavedData = (int) $dataCheck->fetchColumn() > 0;
+            }
+            if ((int) $existing->fetchColumn() > 0 || $hasSavedData) {
                 setFlash('error', 'That branch name already has imported snapshots. Choose another branch name to avoid mixing branch data.');
             } else {
                 $stmt = $db->prepare(
@@ -234,6 +402,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($month));
     }
 
+    if ($action === 'import_branch_data') {
+        try {
+            if (!$hasBranchDataSchema) {
+                throw new InvalidArgumentException('Run database/migrations/010_add_branch_data_snapshots.sql on this database before importing full branch data.');
+            }
+            $uploads = $_FILES['csv_files'] ?? null;
+            if (!is_array($uploads) || !isset($uploads['name'], $uploads['tmp_name'], $uploads['error'], $uploads['size'])
+                || !is_array($uploads['name']) || !is_array($uploads['tmp_name'])
+                || !is_array($uploads['error']) || !is_array($uploads['size'])
+                || count($uploads['name']) === 0) {
+                throw new InvalidArgumentException('Choose one or more full branch data CSV files.');
+            }
+
+            $localBranch = getLocalBranchName($db);
+            $bundles = [];
+            $seenBranches = [];
+            foreach (array_keys($uploads['name']) as $index) {
+                $bundle = parseBranchDataCsv([
+                    'name' => $uploads['name'][$index] ?? null,
+                    'tmp_name' => $uploads['tmp_name'][$index] ?? null,
+                    'error' => $uploads['error'][$index] ?? null,
+                    'size' => $uploads['size'][$index] ?? null,
+                ], $localBranch);
+                if (isset($seenBranches[$bundle['branch_name']])) {
+                    throw new InvalidArgumentException('Only one CSV per branch can be imported at a time.');
+                }
+                $seenBranches[$bundle['branch_name']] = true;
+                $bundles[] = $bundle;
+            }
+
+            $db->beginTransaction();
+            $statement = $db->prepare(
+                "INSERT INTO branch_data_snapshots
+                    (branch_name, exported_at, source_file, snapshot_json, imported_by, imported_at)
+                 VALUES
+                    (:branch_name, :exported_at, :source_file, :snapshot_json, :imported_by, CURRENT_TIMESTAMP)
+                 ON DUPLICATE KEY UPDATE
+                    exported_at = VALUES(exported_at),
+                    source_file = VALUES(source_file),
+                    snapshot_json = VALUES(snapshot_json),
+                    imported_by = VALUES(imported_by),
+                    imported_at = CURRENT_TIMESTAMP"
+            );
+            foreach ($bundles as $bundle) {
+                $statement->execute([
+                    ':branch_name' => $bundle['branch_name'],
+                    ':exported_at' => $bundle['exported_at'],
+                    ':source_file' => $bundle['source_file'],
+                    ':snapshot_json' => json_encode($bundle['data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                    ':imported_by' => (int) $_SESSION['admin_id'],
+                ]);
+            }
+            $branchNames = array_column($bundles, 'branch_name');
+            logActivity(
+                (int) $_SESSION['admin_id'],
+                'branch.data.import',
+                'Branches: ' . implode(', ', $branchNames)
+            );
+            $db->commit();
+            rotateCsrfToken();
+            setFlash('success', count($bundles) . ' full branch data CSV file(s) imported. Existing data for those branches was replaced.');
+        } catch (InvalidArgumentException $error) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            setFlash('error', $error->getMessage());
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('Full branch data import failed: ' . $error->getMessage());
+            setFlash('error', 'Branch data could not be imported. No branch data was changed.');
+        }
+        $returnToImports = ($_POST['return_to'] ?? '') === 'imports';
+        redirect($returnToImports
+            ? BASE_URL . '/pages/imports/index.php'
+            : BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($month));
+    }
+
     setFlash('error', 'Invalid branch analytics action.');
     redirect(BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($month));
 }
@@ -264,6 +511,38 @@ foreach ($stmt->fetchAll() as $snapshot) {
         'attendance_visits' => (int) $snapshot['attendance_visits'],
         'active_memberships' => (int) $snapshot['active_memberships'],
     ];
+}
+if ($hasBranchDataSchema) {
+    $branchDataStmt = $db->prepare(
+        "SELECT branch_name, exported_at, source_file, snapshot_json
+         FROM branch_data_snapshots
+         WHERE branch_name <> :local_branch
+         ORDER BY branch_name"
+    );
+    $branchDataStmt->execute([':local_branch' => $localBranch]);
+    foreach ($branchDataStmt->fetchAll() as $snapshot) {
+        $data = json_decode($snapshot['snapshot_json'], true);
+        if (!is_array($data)) {
+            throw new RuntimeException('Imported branch data is invalid for ' . $snapshot['branch_name'] . '. Re-import that branch CSV.');
+        }
+        $row = [
+            'branch_name' => $snapshot['branch_name'],
+            'captured_at' => $snapshot['exported_at'],
+            'source_file' => $snapshot['source_file'],
+        ] + getImportedBranchAnalytics($data, $month);
+        $existingIndex = null;
+        foreach ($branchRows as $index => $branchRow) {
+            if ($branchRow['branch_name'] === $snapshot['branch_name']) {
+                $existingIndex = $index;
+                break;
+            }
+        }
+        if ($existingIndex === null) {
+            $branchRows[] = $row;
+        } else {
+            $branchRows[$existingIndex] = $row;
+        }
+    }
 }
 
 $totals = [
@@ -316,10 +595,21 @@ require_once BASE_PATH . '/includes/sidebar.php';
             <i data-lucide="chart-no-axes-combined" aria-hidden="true"></i> Consolidated view
         </a>
     </div>
-    <a href="<?= BASE_URL ?>/exports/excel.php?type=branch_analytics&amp;month=<?= rawurlencode($month) ?>" class="btn btn-secondary branch-export-btn">
-        <i data-lucide="download" aria-hidden="true"></i> Export branch CSV
-    </a>
+    <div class="branch-export-actions">
+        <a href="<?= BASE_URL ?>/exports/excel.php?type=branch_analytics&amp;month=<?= rawurlencode($month) ?>" class="btn btn-secondary branch-export-btn">
+            <i data-lucide="download" aria-hidden="true"></i> Export summary
+        </a>
+        <a href="<?= BASE_URL ?>/exports/excel.php?type=branch_data" class="btn btn-primary branch-export-btn">
+            <i data-lucide="database" aria-hidden="true"></i> Export all branch data
+        </a>
+    </div>
 </nav>
+
+<?php if (!$hasBranchDataSchema): ?>
+<div class="alert alert-warning" role="alert">
+    Full branch data transfer requires the one-time migration <code>database/migrations/010_add_branch_data_snapshots.sql</code> on this database.
+</div>
+<?php endif; ?>
 
 <div class="branch-setup-grid">
     <section class="card branch-setup-card">
@@ -341,10 +631,27 @@ require_once BASE_PATH . '/includes/sidebar.php';
     </section>
     <section class="card branch-setup-card">
         <div class="branch-card-heading">
+            <span class="branch-card-icon"><i data-lucide="database" aria-hidden="true"></i></span>
+            <div>
+                <h2>Import full branch data</h2>
+                <p>Collect complete exports from one or more other branches.</p>
+            </div>
+        </div>
+        <div class="branch-setup-hint"><i data-lucide="refresh-cw" aria-hidden="true"></i><span>Members, plans, memberships, attendance, and payments stay separated by branch. Re-importing a branch replaces its previous imported copy.</span></div>
+        <form method="POST" enctype="multipart/form-data" class="branch-import-form">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="import_branch_data">
+            <input type="hidden" name="month" value="<?= sanitize($month) ?>">
+            <label class="branch-file-input"><i data-lucide="file-spreadsheet" aria-hidden="true"></i><span><strong>Choose full branch CSV files</strong><small>One or more files · up to 15 MB each</small></span><input type="file" name="csv_files[]" accept=".csv,text/csv" multiple required></label>
+            <button type="submit" class="btn btn-primary" <?= !$hasBranchDataSchema ? 'disabled' : '' ?>><i data-lucide="upload" aria-hidden="true"></i> Import branch data</button>
+        </form>
+    </section>
+    <section class="card branch-setup-card">
+        <div class="branch-card-heading">
             <span class="branch-card-icon"><i data-lucide="file-up" aria-hidden="true"></i></span>
             <div>
-                <h2>Import branch analytics</h2>
-                <p>Collect monthly snapshots from the other 707 GYM locations.</p>
+                <h2>Import monthly summary CSV</h2>
+                <p>For older exports that contain analytics totals only.</p>
             </div>
         </div>
         <div class="branch-setup-hint"><i data-lucide="refresh-cw" aria-hidden="true"></i><span>Select one CSV from each branch for <?= sanitize($month) ?>, then import them together. Existing snapshots for those branch-months are replaced.</span></div>
@@ -410,7 +717,7 @@ require_once BASE_PATH . '/includes/sidebar.php';
             </tbody>
         </table>
     </div>
-    <p class="branch-data-note"><i data-lucide="info" aria-hidden="true"></i><span>* Active members and active memberships are point-in-time counts captured when each branch exports its CSV. Revenue, new members, and attendance visits cover the selected month. Revenue is paid collections, not net profit; the system does not track expenses. These totals combine branch summaries; they do not copy or merge member-level records into this system.</span></p>
+    <p class="branch-data-note"><i data-lucide="info" aria-hidden="true"></i><span>* Active member and membership counts reflect each branch’s latest export. Revenue, new members, and attendance visits cover the selected month. Detailed imports stay separated by branch and do not enter this branch’s operational member list. Totals add each branch’s counts, so a person active at multiple branches is counted once at each branch. Revenue is paid collections, not net profit; expenses are not tracked.</span></p>
 </section>
 <?php else: ?>
 <section class="card branch-results-card mb-4">
@@ -418,7 +725,7 @@ require_once BASE_PATH . '/includes/sidebar.php';
         <div><span class="branch-eyebrow">ALL LOCATIONS</span><h2>Consolidated analytics</h2><p>Combined summary for <?= sanitize(date('F Y', strtotime($month . '-01'))) ?></p></div>
         <span class="branch-count-badge"><i data-lucide="layers-3" aria-hidden="true"></i> <?= count($branchRows) ?> branch<?= count($branchRows) === 1 ? '' : 'es' ?></span>
     </div>
-    <div class="branch-consolidated-intro"><i data-lucide="chart-no-axes-combined" aria-hidden="true"></i><span>One overview of your branch network. These figures combine exported summaries; they do not merge member accounts between systems.</span></div>
+    <div class="branch-consolidated-intro"><i data-lucide="chart-no-axes-combined" aria-hidden="true"></i><span>One overview of your branch network. Detailed records are retained separately by branch; combined counts are sums and do not deduplicate a person who is active at multiple locations.</span></div>
     <div class="table-wrapper">
         <table class="branch-analytics-table branch-consolidated-table">
             <thead><tr><th>Combined metric</th><th>All branches</th></tr></thead>

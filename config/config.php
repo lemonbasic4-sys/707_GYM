@@ -35,6 +35,7 @@ define('SESSION_NAME',     'gym707_session');
 define('UPLOAD_PATH',     BASE_PATH . '/uploads');
 define('UPLOAD_URL',      BASE_URL  . '/uploads');
 define('MAX_FILE_SIZE',   5 * 1024 * 1024); // 5 MB
+define('MAX_BRANCH_DATA_FILE_SIZE', 15 * 1024 * 1024); // 15 MB per branch transfer CSV
 define('ALLOWED_IMAGES',  ['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 // ─── Pagination ───────────────────────────────────────────────────────────────

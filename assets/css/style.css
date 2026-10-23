@@ -747,6 +747,7 @@ form.filter-bar.attendance-history-filter {
     background: rgba(255, 77, 0, 0.11);
     color: #ff8754;
 }
+.branch-export-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .branch-export-btn { min-height: 36px; font-size: 11px; }
 .branch-export-btn svg { width: 15px; height: 15px; }
 .branch-setup-grid {
@@ -1097,6 +1098,7 @@ form.filter-bar.attendance-history-filter {
     .branch-view-nav { align-items: stretch; flex-direction: column; }
     .branch-view-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .branch-view-tab { justify-content: center; padding: 8px 6px; font-size: 10px; }
+    .branch-export-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .branch-export-btn { justify-content: center; }
     .branch-setup-card { padding: 14px; }
     .branch-identity-form { grid-template-columns: minmax(0, 1fr); }
