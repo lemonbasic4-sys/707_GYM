@@ -1,2 +1,4 @@
 gym_management_essentials.md
 README.md
+/backup/*
+!/backup/.htaccess

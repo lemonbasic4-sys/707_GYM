@@ -21,7 +21,7 @@ define('DB_NAME',    'gym_707');
 define('DB_USER',    'root');
 define('DB_PASS',    '');
 define('DB_CHARSET', 'utf8mb4');
-define('DATABASE_BACKUP_PATH', dirname(dirname(BASE_PATH)) . DIRECTORY_SEPARATOR . basename(BASE_PATH) . '_backups');
+define('DATABASE_BACKUP_PATH', BASE_PATH . DIRECTORY_SEPARATOR . 'backup');
 
 // ─── Timezone ────────────────────────────────────────────────────────────────
 define('APP_TIMEZONE', 'Asia/Manila');
