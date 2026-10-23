@@ -136,8 +136,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div><span class="text-muted">Phone</span><br><?= sanitize($member['phone'] ?? '—') ?></div>
             <div><span class="text-muted">Gender</span><br><?= sanitize(ucfirst($member['gender'] ?? '—')) ?></div>
             <div><span class="text-muted">Date of Birth</span><br><?= $member['date_of_birth'] ? formatDate($member['date_of_birth']) : '—' ?></div>
-            <div><span class="text-muted">Emergency Contact</span><br><?= sanitize($member['emergency_contact_name'] ?? '—') ?></div>
-            <div><span class="text-muted">Emergency Phone</span><br><?= sanitize($member['emergency_contact_phone'] ?? '—') ?></div>
         </div>
     </div>
 </div>

@@ -24,16 +24,16 @@ REPLACE INTO `membership_plans` (`id`, `name`, `description`, `duration_days`, `
 
 REPLACE INTO `members`
     (`id`, `first_name`, `last_name`, `phone`, `gender`, `date_of_birth`, `photo`,
-     `emergency_contact_name`, `emergency_contact_phone`, `status`, `created_at`, `updated_at`)
+     `status`, `created_at`, `updated_at`)
 VALUES
-(1, 'Paolo', 'Bautista', '0917-221-1001', 'male', '1992-02-14', NULL, 'Liza Bautista', '0917-221-2001', 'active', '2026-07-02 09:00:00', NOW()),
-(2, 'Angela', 'Cruz', '0917-221-1002', 'female', '1999-05-26', NULL, 'Mario Cruz', '0917-221-2002', 'active', '2026-07-18 09:00:00', NOW()),
-(3, 'Rafael', 'Lim', '0917-221-1003', 'male', '1988-10-03', NULL, 'Cecilia Lim', '0917-221-2003', 'active', '2026-08-03 09:00:00', NOW()),
-(4, 'Nicole', 'Garcia', '0917-221-1004', 'female', '1996-12-11', NULL, 'Oscar Garcia', '0917-221-2004', 'active', '2026-08-19 09:00:00', NOW()),
-(5, 'Enzo', 'Aquino', '0917-221-1005', 'male', '2001-03-30', NULL, 'Mina Aquino', '0917-221-2005', 'active', '2026-09-07 09:00:00', NOW()),
-(6, 'Beatrice', 'Ramos', '0917-221-1006', 'female', '1990-07-21', NULL, 'Leo Ramos', '0917-221-2006', 'active', '2026-09-22 09:00:00', NOW()),
-(7, 'Marco', 'Dizon', '0917-221-1007', 'male', '1995-01-09', NULL, 'Nora Dizon', '0917-221-2007', 'active', '2026-10-10 09:00:00', NOW()),
-(8, 'Celine', 'Flores', '0917-221-1008', 'female', '1993-09-16', NULL, 'Rico Flores', '0917-221-2008', 'active', '2026-07-25 09:00:00', NOW());
+(1, 'Paolo', 'Bautista', '0917-221-1001', 'male', '1992-02-14', NULL, 'active', '2026-07-02 09:00:00', NOW()),
+(2, 'Angela', 'Cruz', '0917-221-1002', 'female', '1999-05-26', NULL, 'active', '2026-07-18 09:00:00', NOW()),
+(3, 'Rafael', 'Lim', '0917-221-1003', 'male', '1988-10-03', NULL, 'active', '2026-08-03 09:00:00', NOW()),
+(4, 'Nicole', 'Garcia', '0917-221-1004', 'female', '1996-12-11', NULL, 'active', '2026-08-19 09:00:00', NOW()),
+(5, 'Enzo', 'Aquino', '0917-221-1005', 'male', '2001-03-30', NULL, 'active', '2026-09-07 09:00:00', NOW()),
+(6, 'Beatrice', 'Ramos', '0917-221-1006', 'female', '1990-07-21', NULL, 'active', '2026-09-22 09:00:00', NOW()),
+(7, 'Marco', 'Dizon', '0917-221-1007', 'male', '1995-01-09', NULL, 'active', '2026-10-10 09:00:00', NOW()),
+(8, 'Celine', 'Flores', '0917-221-1008', 'female', '1993-09-16', NULL, 'active', '2026-07-25 09:00:00', NOW());
 
 REPLACE INTO `memberships`
     (`id`, `member_id`, `plan_id`, `start_date`, `end_date`, `status`, `created_at`, `updated_at`)

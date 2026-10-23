@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/csrf.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/database_backup.php';
 
 requireAuth();
 
@@ -22,9 +23,66 @@ $stmt->execute([':id' => $adminId]);
 $admin = $stmt->fetch();
 
 $errors = [];
+$backupError = '';
 $activeTab = $_GET['tab'] ?? 'profile';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['set_daily_backup', 'create_backup', 'restore_local'], true)) {
+    $backupAction = $_POST['action'];
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        $backupError = 'Invalid CSRF token. Please reload the page and try again.';
+    } else {
+        try {
+            if ($backupAction === 'set_daily_backup') {
+                $enabled = ($_POST['daily_backup_enabled'] ?? '') === '1' ? 1 : 0;
+                $setting = $pdo->prepare(
+                    'UPDATE backup_settings SET daily_enabled = :enabled WHERE id = 1'
+                );
+                $setting->execute([':enabled' => $enabled]);
+                $storedSetting = (int) $pdo->query('SELECT daily_enabled FROM backup_settings WHERE id = 1')->fetchColumn();
+                if ($storedSetting !== $enabled) {
+                    throw new RuntimeException('The daily backup setting could not be updated.');
+                }
+
+                logActivity(
+                    (int) $_SESSION['admin_id'],
+                    $enabled ? 'Enabled Daily Database Backups' : 'Disabled Daily Database Backups',
+                    'Automatic daily backup generation ' . ($enabled ? 'enabled' : 'disabled')
+                );
+                setFlash('success', $enabled ? 'Automatic daily backups enabled.' : 'Automatic daily backups turned off.');
+            } elseif ($backupAction === 'create_backup') {
+                $backup = createDatabaseBackup($pdo, 'manual');
+                logActivity((int) $_SESSION['admin_id'], 'Created Database Backup', basename($backup['path']));
+                setFlash('success', 'Database backup created: ' . basename($backup['path']));
+            } else {
+                $fileName = basename((string) ($_POST['backup_file'] ?? ''));
+                $backupPath = DATABASE_BACKUP_PATH . DIRECTORY_SEPARATOR . $fileName;
+                if (!preg_match('/^' . preg_quote(DB_NAME, '/') . '_backup_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}_(?:manual|daily|pre-import)\.sql$/', $fileName)
+                    || !is_file($backupPath)) {
+                    throw new RuntimeException('The selected saved backup could not be found.');
+                }
+                $sql = file_get_contents($backupPath);
+                if ($sql === false) {
+                    throw new RuntimeException('The selected saved backup could not be read.');
+                }
+
+                $safetyBackup = createDatabaseBackup($pdo, 'pre-import');
+                $statementCount = importDatabaseSql($pdo, $sql);
+                logActivity(
+                    (int) $_SESSION['admin_id'],
+                    'Restored Database Backup',
+                    $fileName . '; safety backup: ' . basename($safetyBackup['path'])
+                );
+                setFlash('success', 'Database backup restored (' . $statementCount . ' SQL statements). Safety backup saved as ' . basename($safetyBackup['path']) . '.');
+            }
+            redirect(BASE_URL . '/pages/admin/settings.php?tab=backup');
+        } catch (Throwable $exception) {
+            $backupError = 'Database operation failed: ' . $exception->getMessage();
+            $activeTab = 'backup';
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_action'])) {
     if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
         setFlash('danger', 'Invalid CSRF token.');
         redirect(BASE_URL . '/pages/admin/settings.php');
@@ -108,9 +166,6 @@ include BASE_PATH . '/includes/sidebar.php';
         </a>
         <a href="?tab=backup" class="btn <?= $activeTab === 'backup' ? 'btn-primary' : 'btn-ghost' ?>">
             <i data-lucide="database"></i> Database Backup
-        </a>
-        <a href="<?= BASE_URL ?>/pages/memberships/plans.php" class="btn btn-ghost">
-            <i data-lucide="credit-card"></i> Manage Membership Plans &rarr;
         </a>
     </div>
 </div>

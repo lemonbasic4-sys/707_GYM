@@ -26,20 +26,20 @@ REPLACE INTO `membership_plans` (`id`, `name`, `description`, `duration_days`, `
 -- Member details are complete for all fields currently used by the system.
 REPLACE INTO `members`
     (`id`, `first_name`, `last_name`, `phone`, `gender`, `date_of_birth`, `photo`,
-     `emergency_contact_name`, `emergency_contact_phone`, `status`, `created_at`, `updated_at`)
+     `status`, `created_at`, `updated_at`)
 VALUES
-(1, 'Juan', 'Dela Cruz', '0917-111-1001', 'male', '1994-03-12', NULL, 'Rosa Dela Cruz', '0917-111-2001', 'active', '2026-07-01 09:00:00', NOW()),
-(2, 'Maria', 'Santos', '0917-111-1002', 'female', '1998-08-24', NULL, 'Luis Santos', '0917-111-2002', 'active', '2026-07-15 09:00:00', NOW()),
-(3, 'Carlos', 'Reyes', '0917-111-1003', 'male', '1991-11-05', NULL, 'Elena Reyes', '0917-111-2003', 'active', '2026-08-01 09:00:00', NOW()),
-(4, 'Elena', 'Torres', '0917-111-1004', 'female', '2000-01-17', NULL, 'Marco Torres', '0917-111-2004', 'active', '2026-07-05 09:00:00', NOW()),
-(5, 'Gabriel', 'Mendoza', '0917-111-1005', 'male', '1996-06-29', NULL, 'Ana Mendoza', '0917-111-2005', 'active', '2026-09-20 09:00:00', NOW()),
-(6, 'Sofia', 'Villanueva', '0917-111-1006', 'female', '1993-04-02', NULL, 'Ramon Villanueva', '0917-111-2006', 'active', '2026-08-25 09:00:00', NOW()),
-(7, 'Miguel', 'Castillo', '0917-111-1007', 'male', '1989-12-14', NULL, 'Teresa Castillo', '0917-111-2007', 'active', '2026-10-15 09:00:00', NOW()),
-(8, 'Isabella', 'Garcia', '0917-111-1008', 'female', '2001-07-08', NULL, 'Rafael Garcia', '0917-111-2008', 'active', '2026-07-10 09:00:00', NOW()),
-(9, 'Andres', 'Ramos', '0917-111-1009', 'male', '1997-02-19', NULL, 'Lucia Ramos', '0917-111-2009', 'active', '2026-08-10 09:00:00', NOW()),
-(10, 'Camila', 'Flores', '0917-111-1010', 'female', '1995-10-31', NULL, 'Pedro Flores', '0917-111-2010', 'active', '2026-09-01 09:00:00', NOW()),
-(11, 'Daniel', 'Aquino', '0917-111-1011', 'male', '2002-05-23', NULL, 'Mila Aquino', '0917-111-2011', 'active', '2026-10-19 09:00:00', NOW()),
-(12, 'Patricia', 'Navarro', '0917-111-1012', 'female', '1988-09-09', NULL, 'Jose Navarro', '0917-111-2012', 'archived', '2026-07-20 09:00:00', NOW());
+(1, 'Juan', 'Dela Cruz', '0917-111-1001', 'male', '1994-03-12', NULL, 'active', '2026-07-01 09:00:00', NOW()),
+(2, 'Maria', 'Santos', '0917-111-1002', 'female', '1998-08-24', NULL, 'active', '2026-07-15 09:00:00', NOW()),
+(3, 'Carlos', 'Reyes', '0917-111-1003', 'male', '1991-11-05', NULL, 'active', '2026-08-01 09:00:00', NOW()),
+(4, 'Elena', 'Torres', '0917-111-1004', 'female', '2000-01-17', NULL, 'active', '2026-07-05 09:00:00', NOW()),
+(5, 'Gabriel', 'Mendoza', '0917-111-1005', 'male', '1996-06-29', NULL, 'active', '2026-09-20 09:00:00', NOW()),
+(6, 'Sofia', 'Villanueva', '0917-111-1006', 'female', '1993-04-02', NULL, 'active', '2026-08-25 09:00:00', NOW()),
+(7, 'Miguel', 'Castillo', '0917-111-1007', 'male', '1989-12-14', NULL, 'active', '2026-10-15 09:00:00', NOW()),
+(8, 'Isabella', 'Garcia', '0917-111-1008', 'female', '2001-07-08', NULL, 'active', '2026-07-10 09:00:00', NOW()),
+(9, 'Andres', 'Ramos', '0917-111-1009', 'male', '1997-02-19', NULL, 'active', '2026-08-10 09:00:00', NOW()),
+(10, 'Camila', 'Flores', '0917-111-1010', 'female', '1995-10-31', NULL, 'active', '2026-09-01 09:00:00', NOW()),
+(11, 'Daniel', 'Aquino', '0917-111-1011', 'male', '2002-05-23', NULL, 'active', '2026-10-19 09:00:00', NOW()),
+(12, 'Patricia', 'Navarro', '0917-111-1012', 'female', '1988-09-09', NULL, 'archived', '2026-07-20 09:00:00', NOW());
 
 REPLACE INTO `memberships`
     (`id`, `member_id`, `plan_id`, `start_date`, `end_date`, `status`, `created_at`, `updated_at`)

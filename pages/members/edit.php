@@ -41,8 +41,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'phone'                   => trim($_POST['phone']       ?? ''),
             'gender'                  => $_POST['gender']           ?? '',
             'date_of_birth'           => $_POST['date_of_birth']    ?? '',
-            'emergency_contact_name'  => trim($_POST['emergency_contact_name']  ?? ''),
-            'emergency_contact_phone' => trim($_POST['emergency_contact_phone'] ?? ''),
             'status'                  => in_array($_POST['status'] ?? '', ['active','archived']) ? $_POST['status'] : 'active',
         ];
 
@@ -79,8 +77,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     gender     = :gender,
                     date_of_birth = :dob,
                     photo      = :photo,
-                    emergency_contact_name  = :ec_name,
-                    emergency_contact_phone = :ec_phone,
                     status     = :status,
                     updated_at = NOW()
                  WHERE id = :id"
@@ -92,8 +88,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':gender'     => $fields['gender'],
                 ':dob'        => $fields['date_of_birth'] ?: null,
                 ':photo'      => $photoFilename,
-                ':ec_name'    => $fields['emergency_contact_name']  ?: null,
-                ':ec_phone'   => $fields['emergency_contact_phone'] ?: null,
                 ':status'     => $fields['status'],
                 ':id'         => $id,
             ]);
@@ -214,29 +208,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <?php endif; ?>
                     <input type="file" name="photo" accept="image/*">
                     <span class="form-hint">Leave blank to keep current photo.</span>
-                </div>
-            </div>
-        </section>
-
-        <section class="member-form-section">
-            <div class="member-form-section-header">
-                <span class="member-section-icon"><i data-lucide="phone"></i></span>
-                <div><h2>Emergency Contact</h2><p>Contact person in case of emergency.</p></div>
-            </div>
-            <div class="member-form-grid">
-                <div class="member-field">
-                    <span class="member-field-icon"><i data-lucide="user-round"></i></span>
-                    <div class="member-field-content">
-                        <label>Emergency Contact Name</label>
-                        <input type="text" name="emergency_contact_name" value="<?= sanitize($member['emergency_contact_name'] ?? '') ?>">
-                    </div>
-                </div>
-                <div class="member-field">
-                    <span class="member-field-icon"><i data-lucide="phone"></i></span>
-                    <div class="member-field-content">
-                        <label>Emergency Contact Phone</label>
-                        <input type="tel" name="emergency_contact_phone" value="<?= sanitize($member['emergency_contact_phone'] ?? '') ?>">
-                    </div>
                 </div>
             </div>
         </section>

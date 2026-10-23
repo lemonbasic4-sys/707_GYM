@@ -21,6 +21,20 @@ try {
         throw new RuntimeException('Another daily backup is already running.');
     }
 
+    $enabled = Database::getConnection()
+        ->query('SELECT daily_enabled FROM backup_settings WHERE id = 1')
+        ->fetchColumn();
+    if ((int) $enabled !== 1) {
+        $line = '[' . date('Y-m-d H:i:s T') . '] Daily backup is disabled; no backup was created.' . PHP_EOL;
+        if (file_put_contents($logPath, $line, FILE_APPEND | LOCK_EX) === false) {
+            throw new RuntimeException('The daily backup log could not be written.');
+        }
+        echo $line;
+        flock($lock, LOCK_UN);
+        fclose($lock);
+        exit(0);
+    }
+
     $result = createDatabaseBackup(Database::getConnection(), 'daily', true);
     $message = $result['created']
         ? 'Created ' . basename($result['path'])

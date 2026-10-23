@@ -13,6 +13,7 @@ requireAuth();
 
 $db      = Database::getConnection();
 $errors  = [];
+$wizardStartStep = 0;
 
 // ── POST Handler ──────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -25,8 +26,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'phone'                     => trim($_POST['phone']       ?? ''),
             'gender'                    => $_POST['gender']           ?? '',
             'date_of_birth'             => $_POST['date_of_birth']    ?? '',
-            'emergency_contact_name'    => trim($_POST['emergency_contact_name']  ?? ''),
-            'emergency_contact_phone'   => trim($_POST['emergency_contact_phone'] ?? ''),
         ];
 
         if (empty($fields['first_name']))  $errors[] = 'First name is required.';
@@ -78,12 +77,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $db->prepare(
                     "INSERT INTO members
                         (first_name, last_name, phone, gender,
-                         date_of_birth, photo, emergency_contact_name, emergency_contact_phone,
-                         status, created_at, updated_at)
+                         date_of_birth, photo, status, created_at, updated_at)
                      VALUES
                         (:first_name, :last_name, :phone, :gender,
-                         :dob, :photo, :ec_name, :ec_phone,
-                         'active', NOW(), NOW())"
+                         :dob, :photo, 'active', NOW(), NOW())"
                 );
                 $stmt->execute([
                     ':first_name'=> $fields['first_name'],
@@ -92,8 +89,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':gender'    => $fields['gender'],
                     ':dob'       => $fields['date_of_birth'] ?: null,
                     ':photo'     => $photoFilename,
-                    ':ec_name'   => $fields['emergency_contact_name']  ?: null,
-                    ':ec_phone'  => $fields['emergency_contact_phone'] ?: null,
                 ]);
 
                 $newId = (int) $db->lastInsertId();
@@ -108,6 +103,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors[] = 'Database error: ' . $e->getMessage();
                 }
             }
+        }
+    }
+    foreach ($errors as $error) {
+        if (stripos($error, 'photo') !== false || stripos($error, 'camera') !== false) {
+            $wizardStartStep = 1;
+            break;
+        }
+        if (stripos($error, 'database error') !== false || stripos($error, 'conflicts with an existing record') !== false) {
+            $wizardStartStep = 2;
         }
     }
     rotateCsrfToken();
@@ -138,10 +142,29 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <form method="POST" action="" enctype="multipart/form-data" novalidate>
         <?= csrfField() ?>
 
-        <section class="member-form-section">
+        <div class="member-wizard" id="memberWizard">
+            <ol class="member-wizard-steps" aria-label="Registration progress">
+                <li class="is-current" data-wizard-indicator>
+                    <span class="member-wizard-step-number">1</span>
+                    <span class="member-wizard-step-label">Personal info</span>
+                </li>
+                <li data-wizard-indicator>
+                    <span class="member-wizard-step-number">2</span>
+                    <span class="member-wizard-step-label">Profile photo</span>
+                </li>
+                <li data-wizard-indicator>
+                    <span class="member-wizard-step-number">3</span>
+                    <span class="member-wizard-step-label">Review</span>
+                </li>
+            </ol>
+            <div class="member-wizard-progress" role="progressbar" aria-label="Registration progress" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1">
+                <span id="memberWizardProgress"></span>
+            </div>
+
+        <section class="member-form-section member-wizard-panel" data-wizard-panel aria-labelledby="memberStepPersonal">
             <div class="member-form-section-header">
                 <span class="member-section-icon"><i data-lucide="user-round"></i></span>
-                <div><h2>Personal Information</h2><p>Basic details about the member.</p></div>
+                <div><h2 id="memberStepPersonal">Personal Information</h2><p>Basic details about the member.</p></div>
             </div>
             <div class="member-form-grid">
                 <div class="member-field">
@@ -187,10 +210,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         </section>
 
-        <section class="member-form-section">
+        <section class="member-form-section member-wizard-panel" data-wizard-panel aria-labelledby="memberStepPhoto">
             <div class="member-form-section-header">
                 <span class="member-section-icon"><i data-lucide="image"></i></span>
-                <div><h2>Profile Photo</h2><p>Upload a photo or capture one live from the camera.</p></div>
+                <div><h2 id="memberStepPhoto">Profile Photo <span class="text-muted">(Optional)</span></h2><p>Upload a photo or capture one live from the camera.</p></div>
             </div>
             <div class="member-field">
                 <span class="member-field-icon"><i data-lucide="image"></i></span>
@@ -225,34 +248,32 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         </section>
 
-        <section class="member-form-section">
+        <section class="member-form-section member-wizard-panel" data-wizard-panel aria-labelledby="memberStepReview">
             <div class="member-form-section-header">
-                <span class="member-section-icon"><i data-lucide="phone"></i></span>
-                <div><h2>Emergency Contact</h2><p>Contact person in case of emergency.</p></div>
+                <span class="member-section-icon"><i data-lucide="clipboard-check"></i></span>
+                <div><h2 id="memberStepReview">Review Details</h2><p>Check the information before registering this member.</p></div>
             </div>
-            <div class="member-form-grid">
-                <div class="member-field">
-                    <span class="member-field-icon"><i data-lucide="user-round"></i></span>
-                    <div class="member-field-content">
-                        <label>Emergency Contact Name</label>
-                        <input type="text" name="emergency_contact_name" value="<?= sanitize($_POST['emergency_contact_name'] ?? '') ?>">
-                    </div>
-                </div>
-                <div class="member-field">
-                    <span class="member-field-icon"><i data-lucide="phone"></i></span>
-                    <div class="member-field-content">
-                        <label>Emergency Contact Phone</label>
-                        <input type="tel" name="emergency_contact_phone" value="<?= sanitize($_POST['emergency_contact_phone'] ?? '') ?>">
-                    </div>
-                </div>
-            </div>
+            <dl class="member-wizard-review">
+                <div><dt>Full name</dt><dd id="reviewName">—</dd></div>
+                <div><dt>Phone</dt><dd id="reviewPhone">—</dd></div>
+                <div><dt>Gender</dt><dd id="reviewGender">—</dd></div>
+                <div><dt>Date of birth</dt><dd id="reviewDob">—</dd></div>
+                <div><dt>Profile photo</dt><dd id="reviewPhoto">No photo selected</dd></div>
+            </dl>
         </section>
 
-        <div class="member-form-actions">
-            <button type="submit" class="btn btn-primary">
+        <div class="member-wizard-actions">
+            <button type="button" class="btn btn-ghost" id="memberWizardBack" hidden>
+                <i data-lucide="arrow-left"></i> Back
+            </button>
+            <button type="button" class="btn btn-primary" id="memberWizardNext">
+                Continue <i data-lucide="arrow-right"></i>
+            </button>
+            <button type="submit" class="btn btn-primary" id="memberWizardSubmit" hidden>
                 <i data-lucide="user-plus"></i> Register Member
             </button>
             <a href="<?= BASE_URL ?>/pages/members/index.php" class="btn btn-ghost">Cancel</a>
+        </div>
         </div>
     </form>
 </div>
@@ -293,6 +314,100 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         </div>
     </div>
 </div>
+
+<script>
+/* ── Member registration wizard ───────────────────────────── */
+(function () {
+    const wizard = document.getElementById('memberWizard');
+    if (!wizard) return;
+
+    const form = wizard.closest('form');
+    const panels = Array.from(wizard.querySelectorAll('[data-wizard-panel]'));
+    const indicators = Array.from(wizard.querySelectorAll('[data-wizard-indicator]'));
+    const backBtn = document.getElementById('memberWizardBack');
+    const nextBtn = document.getElementById('memberWizardNext');
+    const submitBtn = document.getElementById('memberWizardSubmit');
+    const progress = document.getElementById('memberWizardProgress');
+    const progressBar = wizard.querySelector('[role="progressbar"]');
+    let currentStep = <?= $wizardStartStep ?>;
+
+    wizard.classList.add('member-wizard-enhanced');
+
+    function updateReview() {
+        const value = (name) => form.elements.namedItem(name).value.trim();
+        document.getElementById('reviewName').textContent =
+            [value('first_name'), value('last_name')].filter(Boolean).join(' ') || '—';
+        document.getElementById('reviewPhone').textContent = value('phone') || '—';
+        const gender = value('gender');
+        document.getElementById('reviewGender').textContent =
+            gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : '—';
+        document.getElementById('reviewDob').textContent = value('date_of_birth') || '—';
+        const photoFile = document.getElementById('photoFileInput').files[0];
+        document.getElementById('reviewPhoto').textContent = photoFile
+            ? photoFile.name
+            : (document.getElementById('photoCaptureData').value ? 'Camera photo selected' : 'No photo selected');
+    }
+
+    function showStep(step, focusHeading) {
+        currentStep = Math.max(0, Math.min(step, panels.length - 1));
+        panels.forEach((panel, index) => {
+            panel.hidden = index !== currentStep;
+        });
+        indicators.forEach((indicator, index) => {
+            indicator.classList.toggle('is-current', index === currentStep);
+            indicator.classList.toggle('is-complete', index < currentStep);
+            if (index === currentStep) {
+                indicator.setAttribute('aria-current', 'step');
+            } else {
+                indicator.removeAttribute('aria-current');
+            }
+        });
+        backBtn.hidden = currentStep === 0;
+        nextBtn.hidden = currentStep === panels.length - 1;
+        submitBtn.hidden = currentStep !== panels.length - 1;
+        progress.style.width = `${((currentStep + 1) / panels.length) * 100}%`;
+        progressBar.setAttribute('aria-valuenow', String(currentStep + 1));
+        if (currentStep === panels.length - 1) updateReview();
+        if (focusHeading) {
+            const heading = panels[currentStep].querySelector('h2');
+            if (heading) {
+                heading.setAttribute('tabindex', '-1');
+                heading.focus();
+            }
+        }
+    }
+
+    function validateStep(step) {
+        const fields = Array.from(panels[step].querySelectorAll('input, select, textarea'));
+        for (const field of fields) {
+            if (!field.checkValidity()) {
+                showStep(step, false);
+                field.reportValidity();
+                field.focus();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    nextBtn.addEventListener('click', () => {
+        if (validateStep(currentStep)) showStep(currentStep + 1, true);
+    });
+    backBtn.addEventListener('click', () => showStep(currentStep - 1, true));
+    form.addEventListener('submit', (event) => {
+        for (let step = 0; step < panels.length; step++) {
+            if (!validateStep(step)) {
+                event.preventDefault();
+                return;
+            }
+        }
+    });
+    form.addEventListener('input', updateReview);
+    form.addEventListener('change', updateReview);
+
+    showStep(currentStep, false);
+})();
+</script>
 
 <script>
 /* ── Webcam Capture Logic ───────────────────────────────────── */

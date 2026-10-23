@@ -4,13 +4,11 @@
 CREATE DATABASE IF NOT EXISTS `gym_707` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `gym_707`;
 
+-- Safe to re-run: existing tables and administrator records are preserved.
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS `branches`;
-
 -- 1. Admins Table
-DROP TABLE IF EXISTS `admins`;
-CREATE TABLE `admins` (
+CREATE TABLE IF NOT EXISTS `admins` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `username` VARCHAR(50) NOT NULL UNIQUE,
     `password` VARCHAR(255) NOT NULL,
@@ -18,9 +16,11 @@ CREATE TABLE `admins` (
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+INSERT IGNORE INTO `admins` (`id`, `username`, `password`)
+VALUES (1, 'admin', '$2y$10$AkIiih8j2ZTfcVXQDpjEY.QjiDt8InDdLjb1EXbOXbQZRWQ2o347W');
+
 -- 2. Membership Plans Table
-DROP TABLE IF EXISTS `membership_plans`;
-CREATE TABLE `membership_plans` (
+CREATE TABLE IF NOT EXISTS `membership_plans` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(100) NOT NULL,
     `description` TEXT DEFAULT NULL,
@@ -31,8 +31,7 @@ CREATE TABLE `membership_plans` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. Members Table
-DROP TABLE IF EXISTS `members`;
-CREATE TABLE `members` (
+CREATE TABLE IF NOT EXISTS `members` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `first_name` VARCHAR(50) NOT NULL,
     `last_name` VARCHAR(50) NOT NULL,
@@ -40,16 +39,13 @@ CREATE TABLE `members` (
     `gender` ENUM('male', 'female', 'other') DEFAULT 'other',
     `date_of_birth` DATE DEFAULT NULL,
     `photo` VARCHAR(255) DEFAULT NULL,
-    `emergency_contact_name` VARCHAR(100) DEFAULT NULL,
-    `emergency_contact_phone` VARCHAR(20) DEFAULT NULL,
     `status` ENUM('active', 'archived') DEFAULT 'active',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. Memberships Table
-DROP TABLE IF EXISTS `memberships`;
-CREATE TABLE `memberships` (
+CREATE TABLE IF NOT EXISTS `memberships` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `member_id` INT NOT NULL,
     `plan_id` INT NOT NULL,
@@ -63,8 +59,7 @@ CREATE TABLE `memberships` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. Attendance Table
-DROP TABLE IF EXISTS `attendance`;
-CREATE TABLE `attendance` (
+CREATE TABLE IF NOT EXISTS `attendance` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `member_id` INT NOT NULL,
     `check_in` DATETIME NOT NULL,
@@ -76,8 +71,7 @@ CREATE TABLE `attendance` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. Payments Table
-DROP TABLE IF EXISTS `payments`;
-CREATE TABLE `payments` (
+CREATE TABLE IF NOT EXISTS `payments` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `transaction_id` VARCHAR(50) NOT NULL UNIQUE,
     `transaction_type` VARCHAR(40) NOT NULL DEFAULT 'manual',
@@ -96,8 +90,7 @@ CREATE TABLE `payments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 7. CSV Import Logs Table
-DROP TABLE IF EXISTS `import_logs`;
-CREATE TABLE `import_logs` (
+CREATE TABLE IF NOT EXISTS `import_logs` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `import_type` VARCHAR(50) NOT NULL,
     `filename` VARCHAR(255) NOT NULL,
@@ -112,16 +105,22 @@ CREATE TABLE `import_logs` (
     CONSTRAINT `fk_import_admin` FOREIGN KEY (`imported_by`) REFERENCES `admins` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 8. Branch Analytics Snapshots
-DROP TABLE IF EXISTS `branch_analytics_snapshots`;
-DROP TABLE IF EXISTS `branch_analytics_settings`;
-CREATE TABLE `branch_analytics_settings` (
+-- 8. Database Backup Settings
+CREATE TABLE IF NOT EXISTS `backup_settings` (
+    `id` TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    `daily_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT IGNORE INTO `backup_settings` (`id`, `daily_enabled`) VALUES (1, 0);
+
+-- 9. Branch Analytics Snapshots
+CREATE TABLE IF NOT EXISTS `branch_analytics_settings` (
     `id` TINYINT UNSIGNED NOT NULL PRIMARY KEY,
     `branch_name` VARCHAR(40) NOT NULL DEFAULT '707_GYM_MAIN'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-INSERT INTO `branch_analytics_settings` (`id`, `branch_name`) VALUES (1, '707_GYM_MAIN');
+INSERT IGNORE INTO `branch_analytics_settings` (`id`, `branch_name`) VALUES (1, '707_GYM_MAIN');
 
-CREATE TABLE `branch_analytics_snapshots` (
+CREATE TABLE IF NOT EXISTS `branch_analytics_snapshots` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `branch_name` VARCHAR(40) NOT NULL,
     `period_month` CHAR(7) NOT NULL,
@@ -138,9 +137,8 @@ CREATE TABLE `branch_analytics_snapshots` (
     CONSTRAINT `fk_branch_analytics_admin` FOREIGN KEY (`imported_by`) REFERENCES `admins` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 9. Activity Logs / Audit Trail Table
-DROP TABLE IF EXISTS `activity_logs`;
-CREATE TABLE `activity_logs` (
+-- 10. Activity Logs / Audit Trail Table
+CREATE TABLE IF NOT EXISTS `activity_logs` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `admin_id` INT DEFAULT NULL,
     `action` VARCHAR(100) NOT NULL,

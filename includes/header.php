@@ -52,8 +52,20 @@ $flash     = getFlash();
 
 <?php if ($flash): ?>
 <!-- Flash message injected into DOM; JS will auto-dismiss it -->
+<?php
+$flashIcons = [
+    'success' => 'circle-check',
+    'error'   => 'circle-x',
+    'warning' => 'triangle-alert',
+    'info'    => 'info',
+];
+$flashIcon = $flashIcons[$flash['type']] ?? 'info';
+?>
 <div class="alert alert-<?= sanitize($flash['type']) ?> flash-message" role="alert">
-    <span><?= sanitize($flash['message']) ?></span>
-    <button class="alert-close" onclick="this.parentElement.remove()" aria-label="Close">&times;</button>
+    <span class="flash-icon" aria-hidden="true"><i data-lucide="<?= $flashIcon ?>"></i></span>
+    <span class="flash-copy"><?= sanitize($flash['message']) ?></span>
+    <button class="alert-close" type="button" aria-label="Close notification">
+        <i data-lucide="x"></i>
+    </button>
 </div>
 <?php endif; ?>

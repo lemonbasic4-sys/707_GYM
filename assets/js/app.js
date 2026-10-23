@@ -34,11 +34,16 @@ function restoreSidebar() {
 function initFlashDismiss() {
     const flash = document.querySelector('.flash-message');
     if (flash) {
-        setTimeout(() => {
-            flash.style.transition = 'opacity 0.4s ease';
-            flash.style.opacity = '0';
-            setTimeout(() => flash.remove(), 400);
-        }, 4000);
+        let dismissed = false;
+        const dismiss = () => {
+            if (dismissed) return;
+            dismissed = true;
+            flash.classList.add('is-leaving');
+            setTimeout(() => flash.remove(), 180);
+        };
+
+        flash.querySelector('.alert-close')?.addEventListener('click', dismiss);
+        setTimeout(dismiss, 4200);
     }
 }
 
