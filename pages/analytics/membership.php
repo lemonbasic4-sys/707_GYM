@@ -124,8 +124,8 @@ include BASE_PATH . '/includes/sidebar.php';
                                 <td><?= htmlspecialchars($m['phone'] ?? '-') ?></td>
                                 <td><span class="badge badge-danger"><?= $m['last_expiry'] ? formatDate($m['last_expiry']) : 'Never Active' ?></span></td>
                                 <td>
-                                    <a href="<?= BASE_URL ?>/pages/memberships/activate.php?member_id=<?= (int)$m['member_record_id'] ?>" class="btn btn-sm btn-primary">
-                                        Renew
+                                    <a href="<?= BASE_URL ?>/pages/payments/record.php?type=membership_renewal&amp;member_id=<?= (int)$m['member_record_id'] ?>" class="btn btn-sm btn-primary">
+                                        Record Payment
                                     </a>
                                 </td>
                             </tr>

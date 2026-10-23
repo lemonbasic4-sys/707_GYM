@@ -70,8 +70,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <p><?= number_format($totalItems) ?> total record<?= $totalItems !== 1 ? 's' : '' ?></p>
     </div>
     <div class="page-header-actions">
-        <a href="<?= BASE_URL ?>/pages/memberships/activate.php" class="btn btn-primary">
-            <i data-lucide="plus"></i> Activate Membership
+        <a href="<?= BASE_URL ?>/pages/payments/record.php?type=membership_renewal" class="btn btn-primary">
+            <i data-lucide="plus"></i> Record Membership Payment
         </a>
         <a href="<?= BASE_URL ?>/pages/memberships/plans.php" class="btn btn-secondary">
             <i data-lucide="list"></i> Plans
@@ -89,7 +89,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <option value="">All Statuses</option>
         <option value="active"   <?= $status==='active'?'selected':'' ?>>Active</option>
         <option value="expired"  <?= $status==='expired'?'selected':'' ?>>Expired</option>
-        <option value="inactive" <?= $status==='inactive'?'selected':'' ?>>Inactive</option>
+        <option value="inactive" <?= $status==='inactive'?'selected':'' ?>>Canceled</option>
     </select>
     <button type="submit" class="btn btn-secondary">Filter</button>
     <a href="<?= BASE_URL ?>/pages/memberships/index.php" class="btn btn-ghost">Clear</a>
@@ -117,7 +117,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <td><?= formatDate($ms['end_date']) ?></td>
                     <td>
                         <span class="badge badge-<?= $ms['status']==='active'?'success':($ms['status']==='expired'?'danger':'muted') ?>">
-                            <?= sanitize($ms['status']) ?>
+                            <?= $ms['status'] === 'inactive' ? 'Canceled' : sanitize($ms['status']) ?>
                         </span>
                     </td>
                     <td>

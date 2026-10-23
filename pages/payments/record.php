@@ -31,7 +31,7 @@ if (!is_string($requestedType) || !isset($transactionTypes[$requestedType])) {
 
 $form = [
     'transaction_type' => $requestedType,
-    'member_id' => (int)($_POST['member_id'] ?? 0),
+    'member_id' => (int)($_POST['member_id'] ?? $_GET['member_id'] ?? 0),
     'plan_id' => (int)($_POST['plan_id'] ?? 0),
     'amount' => $_POST['amount'] ?? '',
     'discount' => $_POST['discount'] ?? '0',
@@ -41,6 +41,16 @@ $form = [
     'start_date' => $_POST['start_date'] ?? date('Y-m-d'),
     'notes' => trim($_POST['notes'] ?? ''),
 ];
+$selectedMemberName = '';
+if ($form['member_id'] > 0) {
+    $selectedMemberStmt = $db->prepare(
+        "SELECT CONCAT(first_name, ' ', last_name)
+         FROM members
+         WHERE id = :id AND status = 'active'"
+    );
+    $selectedMemberStmt->execute([':id' => $form['member_id']]);
+    $selectedMemberName = (string)($selectedMemberStmt->fetchColumn() ?: '');
+}
 $isValidDate = static function (string $value): bool {
     $date = DateTime::createFromFormat('!Y-m-d', $value);
     $dateErrors = DateTime::getLastErrors();
@@ -248,7 +258,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
         <div class="payment-field">
             <label for="memberSearch">Select Member <span class="required">*</span></label>
-            <input type="text" id="memberSearch" placeholder="Search and select member..." autocomplete="off">
+            <input type="text" id="memberSearch" placeholder="Search and select member..." autocomplete="off" value="<?= sanitize($selectedMemberName) ?>">
             <input type="hidden" name="member_id" id="memberIdHidden" value="<?= (int)$form['member_id'] ?>">
         </div>
 
@@ -323,7 +333,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    initMemberTypeahead('memberSearch', 'memberIdHidden', '<?= BASE_URL ?>/api/members.php');
+    initMemberTypeahead('memberSearch', 'memberIdHidden', '<?= BASE_URL ?>/api/members.php', true);
 
     const form = document.getElementById('paymentForm');
     const plan = document.getElementById('planSelect');

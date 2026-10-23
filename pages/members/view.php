@@ -75,6 +75,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_status'])) {
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_membership'])) {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        setFlash('error', 'Security token mismatch. Please try again.');
+    } else {
+        $membershipId = (int) $_POST['cancel_membership'];
+        $cancelStmt = $db->prepare(
+            "UPDATE memberships
+             SET status = 'inactive', updated_at = NOW()
+             WHERE id = :membership_id AND member_id = :member_id AND status = 'active'"
+        );
+        $cancelStmt->execute([
+            ':membership_id' => $membershipId,
+            ':member_id' => $id,
+        ]);
+
+        if ($cancelStmt->rowCount() === 1) {
+            logActivity($_SESSION['admin_id'], 'membership.cancel', "Cancelled membership {$membershipId} for member {$id}");
+            setFlash('success', 'Membership plan cancelled.');
+        } else {
+            setFlash('error', 'That active membership could not be found.');
+        }
+    }
+
+    redirect(BASE_URL . '/pages/members/view.php?id=' . $id);
+}
+
 $pageTitle = $member['first_name'] . ' ' . $member['last_name'];
 require_once __DIR__ . '/../../includes/header.php';
 require_once __DIR__ . '/../../includes/sidebar.php';
@@ -150,23 +176,32 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 <!-- Memberships Tab -->
 <div id="tabMemberships" class="tab-panel active">
     <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
-        <a href="<?= BASE_URL ?>/pages/memberships/activate.php?member_id=<?= $id ?>" class="btn btn-primary btn-sm">
-            <i data-lucide="plus"></i> Activate Membership
+        <a href="<?= BASE_URL ?>/pages/payments/record.php?type=membership_renewal&amp;member_id=<?= $id ?>" class="btn btn-primary btn-sm">
+            <i data-lucide="plus"></i> Record Membership Payment
         </a>
     </div>
     <div class="table-wrapper">
         <table>
-            <thead><tr><th>Plan</th><th>Start</th><th>Expiry</th><th>Status</th></tr></thead>
+            <thead><tr><th>Plan</th><th>Start</th><th>Expiry</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
                 <?php if (empty($memberships)): ?>
-                <tr><td colspan="4" class="text-center text-muted" style="padding:20px;">No memberships yet.</td></tr>
+                <tr><td colspan="5" class="text-center text-muted" style="padding:20px;">No memberships yet.</td></tr>
                 <?php else: ?>
                 <?php foreach ($memberships as $ms): ?>
                 <tr>
                     <td><?= sanitize($ms['plan_name']) ?></td>
                     <td><?= formatDate($ms['start_date']) ?></td>
                     <td><?= formatDate($ms['end_date']) ?></td>
-                    <td><span class="badge badge-<?= $ms['status'] === 'active' ? 'success' : ($ms['status'] === 'expired' ? 'danger' : 'muted') ?>"><?= sanitize($ms['status']) ?></span></td>
+                    <td><span class="badge badge-<?= $ms['status'] === 'active' ? 'success' : ($ms['status'] === 'expired' ? 'danger' : 'muted') ?>"><?= $ms['status'] === 'inactive' ? 'Canceled' : sanitize($ms['status']) ?></span></td>
+                    <td>
+                        <?php if ($ms['status'] === 'active'): ?>
+                        <form method="POST" style="display:inline;" onsubmit="return confirm('Cancel this membership plan? The membership will become inactive immediately.')">
+                            <?= csrfField() ?>
+                            <input type="hidden" name="cancel_membership" value="<?= (int) $ms['id'] ?>">
+                            <button type="submit" class="btn btn-danger btn-sm">Cancel Plan</button>
+                        </form>
+                        <?php else: ?>—<?php endif; ?>
+                    </td>
                 </tr>
                 <?php endforeach; ?>
                 <?php endif; ?>
