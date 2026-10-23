@@ -14,6 +14,72 @@ requireAuth();
 
 $db = Database::getConnection();
 $pageTitle = 'Branch Comparison';
+
+function parseBranchAnalyticsCsv(array $file, string $localBranch): array
+{
+    if (!isset($file['error'], $file['size'], $file['name'], $file['tmp_name'])
+        || !is_int($file['error']) || !is_int($file['size'])
+        || !is_string($file['name']) || !is_string($file['tmp_name'])
+        || $file['error'] !== UPLOAD_ERR_OK || $file['size'] <= 0 || $file['size'] > MAX_FILE_SIZE) {
+        throw new InvalidArgumentException('Each selected file must be a readable CSV no larger than 5 MB.');
+    }
+    if (strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) !== 'csv') {
+        throw new InvalidArgumentException('Only CSV files exported from Branch Analytics can be imported.');
+    }
+
+    $handle = fopen($file['tmp_name'], 'r');
+    if ($handle === false) {
+        throw new InvalidArgumentException('A selected CSV file could not be read.');
+    }
+
+    $headers = fgetcsv($handle, null, ',', '"', '\\');
+    if (is_array($headers) && isset($headers[0])) {
+        $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $headers[0]);
+    }
+    $expectedHeaders = [
+        'branch_name', 'period_month', 'captured_at', 'revenue',
+        'new_members', 'active_members', 'attendance_visits', 'active_memberships',
+    ];
+    $row = fgetcsv($handle, null, ',', '"', '\\');
+    $extraRow = false;
+    while (($extra = fgetcsv($handle, null, ',', '"', '\\')) !== false) {
+        if (array_filter($extra, static fn($value) => trim((string) $value) !== '')) {
+            $extraRow = true;
+            break;
+        }
+    }
+    fclose($handle);
+
+    if (!is_array($headers) || array_map('strtolower', array_map('trim', $headers)) !== $expectedHeaders
+        || !is_array($row) || count($row) !== count($expectedHeaders) || $extraRow) {
+        throw new InvalidArgumentException('A selected file is not a valid single-branch analytics CSV.');
+    }
+
+    $snapshot = array_combine($expectedHeaders, array_map('trim', $row));
+    $capturedAt = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $snapshot['captured_at']);
+    $capturedErrors = DateTimeImmutable::getLastErrors();
+    $validCapturedAt = $capturedAt !== false
+        && ($capturedErrors === false || ($capturedErrors['warning_count'] === 0 && $capturedErrors['error_count'] === 0))
+        && $capturedAt->format('Y-m-d H:i:s') === $snapshot['captured_at'];
+    $validMetrics = preg_match('/^\d{1,10}(?:\.\d{1,2})?$/', $snapshot['revenue']) === 1;
+    foreach (['new_members', 'active_members', 'attendance_visits', 'active_memberships'] as $field) {
+        $count = filter_var($snapshot[$field], FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 0, 'max_range' => 4294967295],
+        ]);
+        $validMetrics = $validMetrics && $count !== false;
+    }
+
+    if (!isValidBranchName($snapshot['branch_name'])
+        || $snapshot['branch_name'] === $localBranch
+        || !isValidAnalyticsMonth($snapshot['period_month'])
+        || !$validCapturedAt
+        || !$validMetrics) {
+        throw new InvalidArgumentException('A selected CSV has an invalid branch, month, capture time, or metric. A branch cannot import its own snapshot.');
+    }
+
+    return $snapshot + ['source_file' => substr(basename($file['name']), 0, 255)];
+}
+
 if (!hasBranchAnalyticsSchema($db)) {
     require_once BASE_PATH . '/includes/header.php';
     require_once BASE_PATH . '/includes/sidebar.php';
@@ -82,105 +148,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'import_snapshot') {
-        $file = $_FILES['csv_file'] ?? null;
-        if (!is_array($file) || !isset($file['error'], $file['size'], $file['name'], $file['tmp_name'])
-            || !is_scalar($file['error']) || !is_scalar($file['size'])
-            || !is_string($file['name']) || !is_string($file['tmp_name'])
-            || (int) $file['error'] !== UPLOAD_ERR_OK || (int) $file['size'] > MAX_FILE_SIZE) {
-            setFlash('error', 'Choose a readable CSV file no larger than 5 MB.');
-            redirect(BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($month));
-        }
-        if (strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) !== 'csv') {
-            setFlash('error', 'Branch analytics imports must be CSV files.');
-            redirect(BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($month));
-        }
-
-        $handle = fopen($file['tmp_name'], 'r');
-        if ($handle === false) {
-            setFlash('error', 'The uploaded CSV could not be read.');
-            redirect(BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($month));
-        }
-
-        $headers = fgetcsv($handle, null, ',', '"', '\\');
-        if (isset($headers[0])) {
-            $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', $headers[0]);
-        }
-        $expectedHeaders = [
-            'branch_name', 'period_month', 'captured_at', 'revenue',
-            'new_members', 'active_members', 'attendance_visits', 'active_memberships',
-        ];
-        $row = fgetcsv($handle, null, ',', '"', '\\');
-        $extraRow = false;
-        while (($extra = fgetcsv($handle, null, ',', '"', '\\')) !== false) {
-            if (array_filter($extra, static fn($value) => trim((string) $value) !== '')) {
-                $extraRow = true;
-                break;
+        try {
+            $uploads = $_FILES['csv_files'] ?? null;
+            if (!is_array($uploads) || !isset($uploads['name'], $uploads['type'], $uploads['tmp_name'], $uploads['error'], $uploads['size'])
+                || !is_array($uploads['name']) || !is_array($uploads['type'])
+                || !is_array($uploads['tmp_name']) || !is_array($uploads['error'])
+                || !is_array($uploads['size']) || count($uploads['name']) === 0) {
+                throw new InvalidArgumentException('Choose one or more branch CSV files to import.');
             }
+
+            $localBranch = getLocalBranchName($db);
+            $snapshots = [];
+            $seen = [];
+            foreach (array_keys($uploads['name']) as $index) {
+                $snapshot = parseBranchAnalyticsCsv([
+                    'name' => $uploads['name'][$index] ?? null,
+                    'type' => $uploads['type'][$index] ?? null,
+                    'tmp_name' => $uploads['tmp_name'][$index] ?? null,
+                    'error' => $uploads['error'][$index] ?? null,
+                    'size' => $uploads['size'][$index] ?? null,
+                ], $localBranch);
+                if ($snapshot['period_month'] !== $month) {
+                    throw new InvalidArgumentException('All selected CSV files must match the reporting month shown above.');
+                }
+                $snapshotKey = $snapshot['branch_name'] . '|' . $snapshot['period_month'];
+                if (isset($seen[$snapshotKey])) {
+                    throw new InvalidArgumentException('Only one CSV per branch is allowed in a single import.');
+                }
+                $seen[$snapshotKey] = true;
+                $snapshots[] = $snapshot;
+            }
+
+            $db->beginTransaction();
+            $stmt = $db->prepare(
+                "INSERT INTO branch_analytics_snapshots
+                    (branch_name, period_month, captured_at, revenue, new_members, active_members,
+                     attendance_visits, active_memberships, source_file, imported_by)
+                 VALUES
+                    (:branch_name, :period_month, :captured_at, :revenue, :new_members, :active_members,
+                     :attendance_visits, :active_memberships, :source_file, :imported_by)
+                 ON DUPLICATE KEY UPDATE
+                    captured_at = VALUES(captured_at), revenue = VALUES(revenue),
+                    new_members = VALUES(new_members), active_members = VALUES(active_members),
+                    attendance_visits = VALUES(attendance_visits),
+                    active_memberships = VALUES(active_memberships),
+                    source_file = VALUES(source_file), imported_by = VALUES(imported_by),
+                    imported_at = CURRENT_TIMESTAMP"
+            );
+            foreach ($snapshots as $snapshot) {
+                $stmt->execute([
+                    ':branch_name' => $snapshot['branch_name'],
+                    ':period_month' => $snapshot['period_month'],
+                    ':captured_at' => $snapshot['captured_at'],
+                    ':revenue' => $snapshot['revenue'],
+                    ':new_members' => (int) $snapshot['new_members'],
+                    ':active_members' => (int) $snapshot['active_members'],
+                    ':attendance_visits' => (int) $snapshot['attendance_visits'],
+                    ':active_memberships' => (int) $snapshot['active_memberships'],
+                    ':source_file' => $snapshot['source_file'],
+                    ':imported_by' => (int) $_SESSION['admin_id'],
+                ]);
+            }
+            $branchNames = array_column($snapshots, 'branch_name');
+            logActivity(
+                (int) $_SESSION['admin_id'],
+                'branch.analytics.import',
+                'Branches: ' . implode(', ', $branchNames) . '; month: ' . $month
+            );
+            $db->commit();
+
+            rotateCsrfToken();
+            setFlash('success', count($snapshots) . ' branch CSV file(s) imported for ' . $month . '.');
+        } catch (InvalidArgumentException $error) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            setFlash('error', $error->getMessage());
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('Branch analytics import failed: ' . $error->getMessage());
+            setFlash('error', 'The selected branch CSV files could not be imported. No snapshots were changed.');
         }
-        fclose($handle);
-
-        if (!is_array($headers) || array_map('strtolower', array_map('trim', $headers)) !== $expectedHeaders
-            || !is_array($row) || count($row) !== count($expectedHeaders) || $extraRow) {
-            setFlash('error', 'This is not a valid 707 GYM branch analytics CSV. Export one from the Branch Comparison page.');
-            redirect(BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($month));
-        }
-
-        $snapshot = array_combine($expectedHeaders, array_map('trim', $row));
-        $localBranch = getLocalBranchName($db);
-        $capturedAt = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $snapshot['captured_at']);
-        $capturedErrors = DateTimeImmutable::getLastErrors();
-        $validCapturedAt = $capturedAt !== false
-            && ($capturedErrors === false || ($capturedErrors['warning_count'] === 0 && $capturedErrors['error_count'] === 0))
-            && $capturedAt->format('Y-m-d H:i:s') === $snapshot['captured_at'];
-
-        $validMetrics = preg_match('/^\d{1,10}(?:\.\d{1,2})?$/', $snapshot['revenue']) === 1;
-        foreach (['new_members', 'active_members', 'attendance_visits', 'active_memberships'] as $field) {
-            $count = filter_var($snapshot[$field], FILTER_VALIDATE_INT, [
-                'options' => ['min_range' => 0, 'max_range' => 4294967295],
-            ]);
-            $validMetrics = $validMetrics && $count !== false;
-        }
-
-        if (!isValidBranchName($snapshot['branch_name'])
-            || $snapshot['branch_name'] === $localBranch
-            || !isValidAnalyticsMonth($snapshot['period_month'])
-            || !$validCapturedAt
-            || !$validMetrics) {
-            setFlash('error', 'The CSV contains an invalid branch, month, capture time, or metric. A branch cannot import its own snapshot.');
-            redirect(BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($month));
-        }
-
-        $stmt = $db->prepare(
-            "INSERT INTO branch_analytics_snapshots
-                (branch_name, period_month, captured_at, revenue, new_members, active_members,
-                 attendance_visits, active_memberships, source_file, imported_by)
-             VALUES
-                (:branch_name, :period_month, :captured_at, :revenue, :new_members, :active_members,
-                 :attendance_visits, :active_memberships, :source_file, :imported_by)
-             ON DUPLICATE KEY UPDATE
-                captured_at = VALUES(captured_at), revenue = VALUES(revenue),
-                new_members = VALUES(new_members), active_members = VALUES(active_members),
-                attendance_visits = VALUES(attendance_visits),
-                active_memberships = VALUES(active_memberships),
-                source_file = VALUES(source_file), imported_by = VALUES(imported_by),
-                imported_at = CURRENT_TIMESTAMP"
-        );
-        $stmt->execute([
-            ':branch_name' => $snapshot['branch_name'],
-            ':period_month' => $snapshot['period_month'],
-            ':captured_at' => $snapshot['captured_at'],
-            ':revenue' => $snapshot['revenue'],
-            ':new_members' => (int) $snapshot['new_members'],
-            ':active_members' => (int) $snapshot['active_members'],
-            ':attendance_visits' => (int) $snapshot['attendance_visits'],
-            ':active_memberships' => (int) $snapshot['active_memberships'],
-            ':source_file' => substr(basename($file['name']), 0, 255),
-            ':imported_by' => (int) $_SESSION['admin_id'],
-        ]);
-        logActivity((int) $_SESSION['admin_id'], 'branch.analytics.import', "Branch: {$snapshot['branch_name']}, month: {$snapshot['period_month']}");
-        rotateCsrfToken();
-        setFlash('success', 'Analytics from ' . $snapshot['branch_name'] . ' imported. Re-importing a branch and month replaces its earlier snapshot.');
-        redirect(BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($snapshot['period_month']));
+        redirect(BASE_URL . '/pages/analytics/branches.php?month=' . rawurlencode($month));
     }
 
     setFlash('error', 'Invalid branch analytics action.');
@@ -279,7 +330,7 @@ require_once BASE_PATH . '/includes/sidebar.php';
                 <p>Give each gym copy a unique identity for accurate comparisons.</p>
             </div>
         </div>
-        <div class="branch-setup-hint"><i data-lucide="info" aria-hidden="true"></i><span>Main branch: <strong>707_GYM_MAIN</strong>. Other locations: <strong>707_GYM_1</strong>, <strong>707_GYM_2</strong>, and so on.</span></div>
+        <div class="branch-setup-hint"><i data-lucide="info" aria-hidden="true"></i><span>Give each installation a unique name: <strong>707_GYM_MAIN</strong>, <strong>707_GYM_1</strong>, <strong>707_GYM_2</strong>, and so on. Any installation can compare snapshots from the others.</span></div>
         <form method="POST" class="branch-identity-form">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="save_identity">
@@ -293,15 +344,15 @@ require_once BASE_PATH . '/includes/sidebar.php';
             <span class="branch-card-icon"><i data-lucide="file-up" aria-hidden="true"></i></span>
             <div>
                 <h2>Import branch analytics</h2>
-                <p>Add a CSV snapshot exported from another 707 GYM location.</p>
+                <p>Collect monthly snapshots from the other 707 GYM locations.</p>
             </div>
         </div>
-        <div class="branch-setup-hint"><i data-lucide="refresh-cw" aria-hidden="true"></i><span>Importing the same branch and month replaces its previous snapshot.</span></div>
+        <div class="branch-setup-hint"><i data-lucide="refresh-cw" aria-hidden="true"></i><span>Select one CSV from each branch for <?= sanitize($month) ?>, then import them together. Existing snapshots for those branch-months are replaced.</span></div>
         <form method="POST" enctype="multipart/form-data" class="branch-import-form">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="import_snapshot">
             <input type="hidden" name="month" value="<?= sanitize($month) ?>">
-            <label class="branch-file-input"><i data-lucide="file-spreadsheet" aria-hidden="true"></i><span><strong>Choose a CSV file</strong><small>Branch analytics export · up to 5 MB</small></span><input type="file" name="csv_file" accept=".csv,text/csv" required></label>
+            <label class="branch-file-input"><i data-lucide="file-spreadsheet" aria-hidden="true"></i><span><strong>Choose branch CSV files</strong><small>One snapshot per branch · up to 5 MB each</small></span><input type="file" name="csv_files[]" accept=".csv,text/csv" multiple required></label>
             <button type="submit" class="btn btn-primary"><i data-lucide="upload" aria-hidden="true"></i> Import CSV</button>
         </form>
     </section>
