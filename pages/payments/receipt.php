@@ -20,11 +20,11 @@ if ($id <= 0) {
 
 $stmt = $db->prepare(
     "SELECT p.*, 
-            m.first_name, m.last_name,
+            COALESCE(p.visitor_name, CONCAT(m.first_name, ' ', m.last_name)) AS payer_name,
             pl.name AS plan_name, pl.duration_days,
             ms.start_date, ms.end_date
      FROM payments p
-     JOIN members m ON p.member_id = m.id
+     LEFT JOIN members m ON p.member_id = m.id
      LEFT JOIN memberships ms ON p.membership_id = ms.id
      LEFT JOIN membership_plans pl ON ms.plan_id = pl.id
      WHERE p.id = :id LIMIT 1"
@@ -53,6 +53,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <a href="<?= BASE_URL ?>/pages/payments/index.php" class="btn btn-ghost btn-print">
             <i data-lucide="arrow-left"></i> Back
         </a>
+        <?php if ($payment['transaction_type'] === 'walk_in_pass'): ?>
+        <a href="<?= BASE_URL ?>/pages/attendance/walk-ins.php" class="btn btn-secondary btn-print"><i data-lucide="user-round"></i> Walk-in Visits</a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -77,13 +80,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         </div>
 
-        <!-- Member Info -->
+        <!-- Payer Info -->
         <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px; margin-bottom:20px;">
-            <p class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">Member Information</p>
+            <p class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;"><?= $payment['transaction_type'] === 'walk_in_pass' ? 'Visitor Information' : 'Member Information' ?></p>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:14px;">
                 <div>
                     <span class="text-muted">Name</span><br>
-                    <strong><?= sanitize($payment['first_name'].' '.$payment['last_name']) ?></strong>
+                    <strong><?= sanitize($payment['payer_name']) ?></strong>
                 </div>
                 <div>
                     <span class="text-muted">Transaction Type</span><br>

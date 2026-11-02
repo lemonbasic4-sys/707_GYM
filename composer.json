@@ -1,6 +1,6 @@
 {
   "name": "707gym/management-system",
-  "description": "707 GYM centralized record-keeping and management system with analytics",
+  "description": "707 GYM centralized record-keeping and management system",
   "type": "project",
   "require": {
     "php": ">=8.0",

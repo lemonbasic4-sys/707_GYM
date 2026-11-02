@@ -51,6 +51,38 @@ $attendance = $db->prepare(
 $attendance->execute([':mid' => $id]);
 $attendance = $attendance->fetchAll();
 
+// Member attendance activity for the past year.
+$today = new DateTimeImmutable('today');
+$calendarStart = $today->modify('-364 days');
+$gridStart = $calendarStart->modify('-' . $calendarStart->format('w') . ' days');
+$gridEnd = $today->modify('+' . (6 - (int)$today->format('w')) . ' days');
+$calendarStmt = $db->prepare(
+    'SELECT date FROM attendance WHERE member_id = :member_id AND date BETWEEN :start AND :end'
+);
+$calendarStmt->execute([
+    ':member_id' => $id,
+    ':start' => $calendarStart->format('Y-m-d'),
+    ':end' => $today->format('Y-m-d'),
+]);
+$visitDates = array_fill_keys($calendarStmt->fetchAll(PDO::FETCH_COLUMN), true);
+$calendarDays = [];
+$calendarMonths = [];
+$weekIndex = 0;
+for ($day = $gridStart; $day <= $gridEnd; $day = $day->modify('+1 day')) {
+    if ($day->format('w') === '0') {
+        if ($day >= $calendarStart && $day <= $today && ($weekIndex === 0 || $day->format('j') <= 7)) {
+            $calendarMonths[$weekIndex] = $day->format('M');
+        }
+        $weekIndex++;
+    }
+    $date = $day->format('Y-m-d');
+    $calendarDays[] = [
+        'date' => $date,
+        'visited' => isset($visitDates[$date]),
+        'visible' => $day >= $calendarStart && $day <= $today,
+    ];
+}
+
 // Payment history
 $payments = $db->prepare(
     "SELECT p.*, pl.name AS plan_name
@@ -169,7 +201,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 <!-- Tabs -->
 <div class="tabs">
     <button class="tab-btn active" onclick="switchTab(this,'tabMemberships')">Membership History</button>
-    <button class="tab-btn" onclick="switchTab(this,'tabAttendance')">Attendance (Last 30)</button>
+    <button class="tab-btn" onclick="switchTab(this,'tabAttendance')">Attendance</button>
     <button class="tab-btn" onclick="switchTab(this,'tabPayments')">Payments</button>
 </div>
 
@@ -212,6 +244,40 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <!-- Attendance Tab -->
 <div id="tabAttendance" class="tab-panel">
+    <section class="card attendance-calendar member-attendance-calendar" aria-labelledby="memberAttendanceCalendarTitle">
+        <div class="attendance-calendar-heading">
+            <div>
+                <h2 id="memberAttendanceCalendarTitle">Attendance activity</h2>
+                <p>Days this member checked in during the past year.</p>
+            </div>
+            <span class="attendance-calendar-legend">No visit <i class="level-0"></i><i class="level-3"></i> Visited</span>
+        </div>
+        <div class="attendance-calendar-scroll">
+            <div class="attendance-calendar-chart" style="--calendar-weeks: <?= $weekIndex ?>;">
+                <div class="attendance-calendar-months">
+                    <?php foreach ($calendarMonths as $week => $month): ?>
+                    <span style="grid-column: <?= $week + 1 ?>;"><?= sanitize($month) ?></span>
+                    <?php endforeach; ?>
+                </div>
+                <div class="attendance-calendar-body">
+                    <div class="attendance-calendar-weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+                    <div class="attendance-calendar-grid">
+                        <?php foreach ($calendarDays as $day): ?>
+                        <?php if (!$day['visible']): ?>
+                        <span class="attendance-calendar-cell is-empty" aria-hidden="true"></span>
+                        <?php else: ?>
+                        <span class="attendance-calendar-cell level-<?= $day['visited'] ? 3 : 0 ?>"
+                              title="<?= sanitize($day['date']) ?>: <?= $day['visited'] ? 'Checked in' : 'No visit' ?>"
+                              aria-label="<?= sanitize($day['date']) ?>: <?= $day['visited'] ? 'Checked in' : 'No visit' ?>"></span>
+                        <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <h3 class="member-attendance-recent-title">Recent 30 visits</h3>
     <div class="table-wrapper">
         <table>
             <thead><tr><th>Check-in</th><th>Check-out</th><th>Duration</th></tr></thead>

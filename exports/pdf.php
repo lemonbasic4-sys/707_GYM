@@ -76,7 +76,7 @@ ob_start();
         </table>
     <?php elseif ($type === 'payments'): ?>
         <?php
-        $payments = $pdo->query("SELECT p.*, m.first_name, m.last_name FROM payments p JOIN members m ON p.member_id = m.id ORDER BY p.payment_date DESC LIMIT 100")->fetchAll();
+        $payments = $pdo->query("SELECT p.*, COALESCE(p.visitor_name, CONCAT(m.first_name, ' ', m.last_name)) AS payer_name FROM payments p LEFT JOIN members m ON p.member_id = m.id ORDER BY p.payment_date DESC LIMIT 100")->fetchAll();
         ?>
         <table>
             <thead>
@@ -84,7 +84,7 @@ ob_start();
                     <th>Tx ID</th>
                     <th>Type</th>
                     <th>Date</th>
-                    <th>Member</th>
+                    <th>Name</th>
                     <th>Method</th>
                     <th class="text-right">Amount</th>
                 </tr>
@@ -95,7 +95,7 @@ ob_start();
                         <td><?= htmlspecialchars($p['transaction_id']) ?></td>
                         <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', $p['transaction_type']))) ?></td>
                         <td><?= htmlspecialchars($p['payment_date']) ?></td>
-                        <td><?= htmlspecialchars($p['first_name'] . ' ' . $p['last_name']) ?></td>
+                        <td><?= htmlspecialchars($p['payer_name']) ?></td>
                         <td><?= ucfirst($p['payment_method']) ?></td>
                         <td class="text-right"><?= formatPhilippineCurrency($p['amount']) ?></td>
                     </tr>

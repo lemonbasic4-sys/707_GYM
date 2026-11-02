@@ -27,13 +27,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <div class="page-header imports-page-header">
     <div class="page-header-left">
-        <h1>Branch Data Transfer</h1>
-        <p>Export or import all branch data with one CSV file.</p>
+        <h1>CSV Import</h1>
+        <p>Import member, membership, attendance, and payment records.</p>
     </div>
     <div class="page-header-actions imports-page-actions">
-        <a href="<?= BASE_URL ?>/pages/analytics/branches.php" class="btn btn-secondary">
-            <i data-lucide="git-compare-arrows"></i> Branch Analytics
-        </a>
         <a href="<?= BASE_URL ?>/pages/imports/history.php" class="btn btn-secondary">
             <i data-lucide="history"></i> Import History
         </a>
@@ -41,42 +38,18 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 </div>
 
 <section class="branch-setup-grid imports-branch-transfer">
-    <article class="card branch-setup-card">
-        <div class="branch-card-heading">
-            <span class="branch-card-icon"><i data-lucide="database"></i></span>
-            <div>
-                <h2>Export everything</h2>
-                <p>Download one CSV with members, plans, memberships, attendance, and payments.</p>
-            </div>
-        </div>
-        <div class="branch-setup-hint"><i data-lucide="shield"></i><span>Export from each branch, then import the other branches’ files on the system used for combined analytics. Give each installation a unique name in Branch Analytics first.</span></div>
-        <a href="<?= BASE_URL ?>/exports/excel.php?type=branch_data" class="btn btn-primary">
-            <i data-lucide="download"></i> Export All Branch Data
-        </a>
-    </article>
-
+    <?php foreach (['members' => 'Members', 'memberships' => 'Memberships', 'attendance' => 'Attendance', 'payments' => 'Payments'] as $type => $label): ?>
     <article class="card branch-setup-card">
         <div class="branch-card-heading">
             <span class="branch-card-icon"><i data-lucide="file-up"></i></span>
             <div>
-                <h2>Import everything</h2>
-                <p>Import one or more branch CSV exports together.</p>
+                <h2><?= sanitize($label) ?></h2>
+                <p>Upload a CSV and map its columns to <?= strtolower(sanitize($label)) ?> records.</p>
             </div>
         </div>
-        <div class="branch-setup-hint"><i data-lucide="refresh-cw"></i><span>Import files from other branches only. Records stay separate by branch; importing the same branch again replaces its previous copy.</span></div>
-        <form method="POST" action="<?= BASE_URL ?>/pages/analytics/branches.php" enctype="multipart/form-data" class="branch-import-form">
-            <?= csrfField() ?>
-            <input type="hidden" name="action" value="import_branch_data">
-            <input type="hidden" name="return_to" value="imports">
-            <input type="hidden" name="month" value="<?= date('Y-m') ?>">
-            <label class="branch-file-input">
-                <i data-lucide="file-spreadsheet"></i>
-                <span><strong>Choose branch CSV files</strong><small>One or more files · up to 15 MB each</small></span>
-                <input type="file" name="csv_files[]" accept=".csv,text/csv" multiple required>
-            </label>
-            <button type="submit" class="btn btn-primary"><i data-lucide="upload"></i> Import All Branch Data</button>
-        </form>
+        <a href="<?= BASE_URL ?>/pages/imports/upload.php?type=<?= urlencode($type) ?>" class="btn btn-primary">Import <?= sanitize($label) ?></a>
     </article>
+    <?php endforeach; ?>
 </section>
 
 <!-- Recent Imports Table -->

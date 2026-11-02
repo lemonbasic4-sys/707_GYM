@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS `memberships` (
     `status` ENUM('active', 'expired', 'inactive') DEFAULT 'active',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY `idx_memberships_status_end_date` (`status`, `end_date`),
     CONSTRAINT `fk_memberships_member` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_memberships_plan` FOREIGN KEY (`plan_id`) REFERENCES `membership_plans` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -67,6 +68,7 @@ CREATE TABLE IF NOT EXISTS `attendance` (
     `date` DATE NOT NULL,
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY `uk_member_date` (`member_id`, `date`),
+    KEY `idx_attendance_date` (`date`),
     CONSTRAINT `fk_attendance_member` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -75,7 +77,10 @@ CREATE TABLE IF NOT EXISTS `payments` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `transaction_id` VARCHAR(50) NOT NULL UNIQUE,
     `transaction_type` VARCHAR(40) NOT NULL DEFAULT 'manual',
-    `member_id` INT NOT NULL,
+    `member_id` INT DEFAULT NULL,
+    `visitor_name` VARCHAR(100) DEFAULT NULL,
+    `visitor_check_in` DATETIME DEFAULT NULL,
+    `visitor_check_out` DATETIME DEFAULT NULL,
     `membership_id` INT DEFAULT NULL,
     `amount` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     `payment_method` ENUM('cash', 'gcash', 'bank_transfer', 'card') DEFAULT 'cash',
@@ -84,6 +89,8 @@ CREATE TABLE IF NOT EXISTS `payments` (
     `payment_date` DATE NOT NULL,
     `status` ENUM('paid', 'partial', 'unpaid') DEFAULT 'paid',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    KEY `idx_payments_created_at` (`created_at`),
+    KEY `idx_payments_visitor_visit` (`transaction_type`, `visitor_check_out`, `visitor_check_in`),
     CONSTRAINT `fk_payments_member` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_payments_membership` FOREIGN KEY (`membership_id`) REFERENCES `memberships` (`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_payments_admin` FOREIGN KEY (`recorded_by`) REFERENCES `admins` (`id`) ON DELETE SET NULL
@@ -113,41 +120,7 @@ CREATE TABLE IF NOT EXISTS `backup_settings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 INSERT IGNORE INTO `backup_settings` (`id`, `daily_enabled`) VALUES (1, 0);
 
--- 9. Branch Analytics Snapshots
-CREATE TABLE IF NOT EXISTS `branch_analytics_settings` (
-    `id` TINYINT UNSIGNED NOT NULL PRIMARY KEY,
-    `branch_name` VARCHAR(40) NOT NULL DEFAULT '707_GYM_MAIN'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-INSERT IGNORE INTO `branch_analytics_settings` (`id`, `branch_name`) VALUES (1, '707_GYM_MAIN');
-
-CREATE TABLE IF NOT EXISTS `branch_analytics_snapshots` (
-    `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `branch_name` VARCHAR(40) NOT NULL,
-    `period_month` CHAR(7) NOT NULL,
-    `captured_at` DATETIME NOT NULL,
-    `revenue` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    `new_members` INT UNSIGNED NOT NULL DEFAULT 0,
-    `active_members` INT UNSIGNED NOT NULL DEFAULT 0,
-    `attendance_visits` INT UNSIGNED NOT NULL DEFAULT 0,
-    `active_memberships` INT UNSIGNED NOT NULL DEFAULT 0,
-    `source_file` VARCHAR(255) NOT NULL,
-    `imported_by` INT DEFAULT NULL,
-    `imported_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY `uk_branch_analytics_branch_month` (`branch_name`, `period_month`),
-    CONSTRAINT `fk_branch_analytics_admin` FOREIGN KEY (`imported_by`) REFERENCES `admins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS `branch_data_snapshots` (
-    `branch_name` VARCHAR(40) NOT NULL PRIMARY KEY,
-    `exported_at` DATETIME NOT NULL,
-    `source_file` VARCHAR(255) NOT NULL,
-    `snapshot_json` LONGTEXT NOT NULL,
-    `imported_by` INT DEFAULT NULL,
-    `imported_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT `fk_branch_data_admin` FOREIGN KEY (`imported_by`) REFERENCES `admins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 10. Activity Logs / Audit Trail Table
+-- 9. Activity Logs / Audit Trail Table
 CREATE TABLE IF NOT EXISTS `activity_logs` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `admin_id` INT DEFAULT NULL,

@@ -54,20 +54,9 @@ function createDatabaseBackup(PDO $pdo, string $type = 'manual', bool $skipIfExi
     }
 
     try {
-        $branchName = 'Unknown';
-        try {
-            $branch = $pdo->query('SELECT branch_name FROM branch_analytics_settings WHERE id = 1')->fetchColumn();
-            if (is_string($branch) && $branch !== '') {
-                $branchName = $branch;
-            }
-        } catch (PDOException) {
-            // Older installations may not have branch analytics yet.
-        }
-
         $serverVersion = (string) $pdo->query('SELECT VERSION()')->fetchColumn();
         $header = "-- 707 GYM Database Backup\n"
             . '-- Database: ' . DB_NAME . "\n"
-            . '-- Branch: ' . str_replace(["\r", "\n"], ' ', $branchName) . "\n"
             . '-- Generated: ' . $now->format('Y-m-d H:i:s e (P)') . "\n"
             . '-- Type: ' . $type . "\n"
             . '-- Server: ' . str_replace(["\r", "\n"], ' ', $serverVersion) . "\n\n"

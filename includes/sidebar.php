@@ -23,7 +23,7 @@ $isDashboard = (str_contains($currentPath, 'dashboard') || rtrim(parse_url($curr
 <aside class="sidebar" id="sidebar">
     <!-- Brand -->
     <div class="sidebar-brand">
-        <img class="brand-icon" src="<?= BASE_URL ?>/assets/img/gym_logo.png" alt="">
+        <img class="brand-icon" src="<?= BASE_URL ?>/assets/img/official_gym_logo.jpg" alt="Stoner 707 GYM logo">
         <span class="brand-name"><?= APP_NAME ?></span>
     </div>
 
@@ -73,13 +73,6 @@ $isDashboard = (str_contains($currentPath, 'dashboard') || rtrim(parse_url($curr
                 </a>
             </li>
             <li>
-                <a href="<?= BASE_URL ?>/pages/analytics/index.php"
-                   class="nav-link <?= navActive('/analytics/') ?>">
-                    <i data-lucide="bar-chart-2" class="nav-icon"></i>
-                    <span>Analytics</span>
-                </a>
-            </li>
-            <li>
                 <a href="<?= BASE_URL ?>/pages/admin/audit-log.php"
                    class="nav-link <?= navActive('/audit-log.php') ?>">
                     <i data-lucide="clipboard-list" class="nav-icon"></i>
@@ -101,7 +94,7 @@ $isDashboard = (str_contains($currentPath, 'dashboard') || rtrim(parse_url($curr
 
     <!-- Admin Profile -->
     <div class="sidebar-footer">
-        <img class="admin-avatar" src="<?= BASE_URL ?>/assets/img/gym_logo.png" alt="707 GYM logo">
+        <img class="admin-avatar" src="<?= BASE_URL ?>/assets/img/official_gym_logo.jpg" alt="Stoner 707 GYM logo">
         <div class="admin-info">
             <span class="admin-name"><?= sanitize($adminName) ?></span>
         </div>

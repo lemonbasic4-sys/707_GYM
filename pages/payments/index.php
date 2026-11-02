@@ -22,10 +22,11 @@ $where  = ['1=1'];
 $params = [];
 
 if ($search !== '') {
-    $where[]  = "(m.first_name LIKE :first_name OR m.last_name LIKE :last_name OR p.transaction_id LIKE :transaction_id)";
+    $where[]  = "(m.first_name LIKE :first_name OR m.last_name LIKE :last_name OR p.visitor_name LIKE :visitor_name OR p.transaction_id LIKE :transaction_id)";
     $searchTerm = "%{$search}%";
     $params[':first_name'] = $searchTerm;
     $params[':last_name'] = $searchTerm;
+    $params[':visitor_name'] = $searchTerm;
     $params[':transaction_id'] = $searchTerm;
 }
 if ($method)       { $where[] = 'p.payment_method = :pm'; $params[':pm'] = $method; }
@@ -35,22 +36,22 @@ if ($dateTo)       { $where[] = 'p.payment_date <= :dt'; $params[':dt'] = $dateT
 
 $whereSQL = implode(' AND ', $where);
 
-$cntStmt = $db->prepare("SELECT COUNT(*) FROM payments p JOIN members m ON p.member_id=m.id WHERE {$whereSQL}");
+$cntStmt = $db->prepare("SELECT COUNT(*) FROM payments p LEFT JOIN members m ON p.member_id=m.id WHERE {$whereSQL}");
 $cntStmt->execute($params);
 $totalItems = (int)$cntStmt->fetchColumn();
 $pagination = getPaginationData($totalItems, $page);
 
 // Total filtered amount
-$sumStmt = $db->prepare("SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN members m ON p.member_id=m.id WHERE {$whereSQL}");
+$sumStmt = $db->prepare("SELECT COALESCE(SUM(p.amount),0) FROM payments p LEFT JOIN members m ON p.member_id=m.id WHERE {$whereSQL}");
 $sumStmt->execute($params);
 $totalAmount = (float)$sumStmt->fetchColumn();
 
 $stmt = $db->prepare(
     "SELECT p.id, p.transaction_id, p.transaction_type, p.amount, p.payment_method, p.payment_date, p.status, p.notes,
-            m.first_name, m.last_name,
+            COALESCE(p.visitor_name, CONCAT(m.first_name, ' ', m.last_name)) AS payer_name,
             pl.name AS plan_name
      FROM payments p
-     JOIN members m ON p.member_id = m.id
+     LEFT JOIN members m ON p.member_id = m.id
      LEFT JOIN memberships ms ON p.membership_id = ms.id
      LEFT JOIN membership_plans pl ON ms.plan_id = pl.id
      WHERE {$whereSQL}
@@ -77,12 +78,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     </div>
     <div class="page-header-actions">
         <a href="<?= BASE_URL ?>/pages/payments/record.php" class="btn btn-primary"><i data-lucide="plus"></i> Record Payment</a>
+        <a href="<?= BASE_URL ?>/pages/attendance/walk-ins.php" class="btn btn-secondary"><i data-lucide="user-round"></i> Walk-in Visits</a>
         <a href="<?= BASE_URL ?>/pages/payments/history.php" class="btn btn-secondary"><i data-lucide="history"></i> Full History</a>
     </div>
 </div>
 
 <form method="GET" class="filter-bar payments-filter-bar">
-    <input type="search" name="search" placeholder="Search member, txn..." value="<?= sanitize($search) ?>">
+    <input type="search" name="search" placeholder="Search member, visitor, txn..." value="<?= sanitize($search) ?>">
     <select name="method">
         <option value="">All Methods</option>
         <option value="cash"          <?= $method==='cash'?'selected':'' ?>>Cash</option>
@@ -111,14 +113,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <div class="table-wrapper">
         <table class="payments-table">
             <thead>
-                <tr><th>Txn ID</th><th>Type</th><th>Member</th><th>Plan</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th><th>Actions</th></tr>
+                <tr><th>Txn ID</th><th>Type</th><th>Name</th><th>Plan</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th><th>Actions</th></tr>
             </thead>
             <tbody>
                 <?php foreach ($payments as $pmt): ?>
                 <tr>
                     <td><span class="badge badge-muted" style="font-size:10px;"><?= sanitize($pmt['transaction_id']) ?></span></td>
                     <td><?= sanitize(ucwords(str_replace('_', ' ', $pmt['transaction_type']))) ?></td>
-                    <td><?= sanitize($pmt['first_name'].' '.$pmt['last_name']) ?></td>
+                    <td><?= sanitize($pmt['payer_name']) ?></td>
                     <td><?= sanitize($pmt['plan_name'] ?? '—') ?></td>
                     <td class="fw-600"><?= formatPhilippineCurrency($pmt['amount']) ?></td>
                     <td><span class="badge badge-info"><?= sanitize($pmt['payment_method']) ?></span></td>

@@ -128,6 +128,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <p><?= date('F j, Y') ?> &bull; <?= count($records) ?> check-in<?= count($records)!==1?'s':'' ?></p>
     </div>
     <div class="page-header-actions">
+        <a href="<?= BASE_URL ?>/pages/attendance/walk-ins.php" class="btn btn-primary">
+            <i data-lucide="user-round"></i> Walk-in Visits
+        </a>
         <a href="<?= BASE_URL ?>/pages/attendance/history.php" class="btn btn-secondary">
             <i data-lucide="history"></i> History
         </a>

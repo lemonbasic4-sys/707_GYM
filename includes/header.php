@@ -24,10 +24,11 @@ $flash     = getFlash();
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Application stylesheet -->
-    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css?v=<?= filemtime(BASE_PATH . '/assets/css/style.css') ?>">
 
     <!-- Inline CSS variables + token overrides -->
     <style>
+        [hidden] { display: none !important; }
         :root {
             --accent:       #FF4D00;
             --accent-hover: #E64600;

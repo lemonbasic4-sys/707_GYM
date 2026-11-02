@@ -26,7 +26,7 @@ $systemFields = [
     'members'      => ['first_name','last_name','phone','gender','date_of_birth'],
     'memberships'  => ['member_phone','plan_name','start_date','end_date','status'],
     'attendance'   => ['member_phone','check_in','check_out','date'],
-    'payments'     => ['member_phone','amount','payment_method','payment_date','status'],
+    'payments'     => ['transaction_id','member_phone','amount','payment_method','payment_date','status'],
 ];
 $fields = $systemFields[$type];
 
@@ -100,7 +100,7 @@ if ($step === 4 && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['execut
             foreach ($data as $i => $row) {
                 $record = [];
                 foreach ($colMap as $sysField => $csvIdx) {
-                    $record[$sysField] = $row[$csvIdx] ?? null;
+                    $record[$sysField] = $csvIdx === '' ? null : ($row[$csvIdx] ?? null);
                 }
 
                 if ($type === 'members') {
@@ -131,14 +131,60 @@ if ($step === 4 && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['execut
                     $mStmt->execute([':phone'=>trim($record['member_phone'] ?? '')]);
                     $mRow = $mStmt->fetch();
                     if (!$mRow) { $skipped++; $errDetails[] = "Row ".($i+2).": member not found."; continue; }
-                    $db->prepare(
+                    $insert = $db->prepare(
                         "INSERT IGNORE INTO attendance (member_id,check_in,check_out,date,created_at)
                          VALUES (:mid,:ci,:co,:d,NOW())"
-                    )->execute([
+                    );
+                    $insert->execute([
                         ':mid'=>$mRow['id'],
                         ':ci'=>$record['check_in']??null,':co'=>$record['check_out']??null,
                         ':d'=>$record['date']??date('Y-m-d'),
                     ]);
+                    if ($insert->rowCount() > 0) { $imported++; } else { $skipped++; }
+                } elseif ($type === 'memberships') {
+                    $member = $db->prepare('SELECT id FROM members WHERE phone = :phone LIMIT 1');
+                    $member->execute([':phone' => trim((string)($record['member_phone'] ?? ''))]);
+                    $memberId = $member->fetchColumn();
+                    $plan = $db->prepare('SELECT id FROM membership_plans WHERE name = :name LIMIT 1');
+                    $plan->execute([':name' => trim((string)($record['plan_name'] ?? ''))]);
+                    $planId = $plan->fetchColumn();
+                    $start = (string)($record['start_date'] ?? '');
+                    $end = (string)($record['end_date'] ?? '');
+                    $status = (string)($record['status'] ?? 'active');
+                    if (!$memberId || !$planId || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)
+                        || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)
+                        || $end < $start || !in_array($status, ['active', 'expired', 'inactive'], true)) {
+                        $skipped++; $errDetails[] = 'Row ' . ($i + 2) . ': invalid membership or missing member/plan.'; continue;
+                    }
+                    $existing = $db->prepare('SELECT id FROM memberships WHERE member_id = :member AND plan_id = :plan AND start_date = :start AND end_date = :end LIMIT 1');
+                    $existing->execute([':member' => $memberId, ':plan' => $planId, ':start' => $start, ':end' => $end]);
+                    if ($existing->fetchColumn()) { $skipped++; continue; }
+                    $db->prepare('INSERT INTO memberships (member_id,plan_id,start_date,end_date,status) VALUES (:member,:plan,:start,:end,:status)')
+                        ->execute([':member' => $memberId, ':plan' => $planId, ':start' => $start, ':end' => $end, ':status' => $status]);
+                    $imported++;
+                } elseif ($type === 'payments') {
+                    $member = $db->prepare('SELECT id FROM members WHERE phone = :phone LIMIT 1');
+                    $member->execute([':phone' => trim((string)($record['member_phone'] ?? ''))]);
+                    $memberId = $member->fetchColumn();
+                    $amount = (string)($record['amount'] ?? '');
+                    $transactionId = trim((string)($record['transaction_id'] ?? ''));
+                    $method = (string)($record['payment_method'] ?? 'cash');
+                    $date = (string)($record['payment_date'] ?? '');
+                    $status = (string)($record['status'] ?? 'paid');
+                    if (!$memberId || $transactionId === '' || strlen($transactionId) > 50
+                        || !preg_match('/^\d+(?:\.\d{1,2})?$/', $amount)
+                        || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)
+                        || !in_array($method, ['cash', 'gcash', 'bank_transfer', 'card'], true)
+                        || !in_array($status, ['paid', 'partial', 'unpaid'], true)) {
+                        $skipped++; $errDetails[] = 'Row ' . ($i + 2) . ': invalid payment or missing member.'; continue;
+                    }
+                    $existing = $db->prepare('SELECT id FROM payments WHERE transaction_id = :id LIMIT 1');
+                    $existing->execute([':id' => $transactionId]);
+                    if ($existing->fetchColumn()) { $skipped++; continue; }
+                    $db->prepare("INSERT INTO payments (transaction_id,transaction_type,member_id,amount,payment_method,payment_date,status)
+                                  VALUES (:id,'manual',:member,:amount,:method,:date,:status)")
+                        ->execute([':id' => $transactionId, ':member' => $memberId, ':amount' => $amount,
+                                   ':method' => $method, ':date' => $date, ':status' => $status]);
                     $imported++;
                 } else {
                     // Generic: count as skipped if no specific handler

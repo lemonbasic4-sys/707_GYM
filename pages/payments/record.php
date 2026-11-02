@@ -32,6 +32,7 @@ if (!is_string($requestedType) || !isset($transactionTypes[$requestedType])) {
 $form = [
     'transaction_type' => $requestedType,
     'member_id' => (int)($_POST['member_id'] ?? $_GET['member_id'] ?? 0),
+    'visitor_name' => trim((string)($_POST['visitor_name'] ?? '')),
     'plan_id' => (int)($_POST['plan_id'] ?? 0),
     'amount' => $_POST['amount'] ?? '',
     'discount' => $_POST['discount'] ?? '0',
@@ -69,17 +70,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!isset($paymentMethods[$form['payment_method']])) {
             $errors[] = 'Select a valid payment method.';
         }
-        if ($form['member_id'] <= 0) {
+        $isWalkIn = $form['transaction_type'] === 'walk_in_pass';
+        if ($isWalkIn && ($form['visitor_name'] === '' || mb_strlen($form['visitor_name']) > 100)) {
+            $errors[] = 'Enter the visitor name (up to 100 characters).';
+        }
+        if (!$isWalkIn && $form['member_id'] <= 0) {
             $errors[] = 'Select a member.';
         }
         if (!$isValidDate($form['payment_date'])) {
             $errors[] = 'Enter a valid payment date.';
         }
 
-        $memberStmt = $db->prepare("SELECT id FROM members WHERE id = :id AND status = 'active'");
-        $memberStmt->execute([':id' => $form['member_id']]);
-        if (!$memberStmt->fetchColumn()) {
-            $errors[] = 'The selected member is unavailable. Select an active member.';
+        if (!$isWalkIn) {
+            $memberStmt = $db->prepare("SELECT id FROM members WHERE id = :id AND status = 'active'");
+            $memberStmt->execute([':id' => $form['member_id']]);
+            if (!$memberStmt->fetchColumn()) {
+                $errors[] = 'The selected member is unavailable. Select an active member.';
+            }
         }
 
         $plan = null;
@@ -172,14 +179,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $paymentStmt = $db->prepare(
                     "INSERT INTO payments
-                        (transaction_id, transaction_type, member_id, membership_id, amount, payment_method, notes, recorded_by, payment_date, status, created_at)
+                        (transaction_id, transaction_type, member_id, visitor_name, visitor_check_in, membership_id, amount, payment_method, notes, recorded_by, payment_date, status, created_at)
                      VALUES
-                        (:transaction_id, :transaction_type, :member_id, :membership_id, :amount, :payment_method, :notes, :recorded_by, :payment_date, 'paid', NOW())"
+                        (:transaction_id, :transaction_type, :member_id, :visitor_name, :visitor_check_in, :membership_id, :amount, :payment_method, :notes, :recorded_by, :payment_date, 'paid', NOW())"
                 );
                 $paymentStmt->execute([
                     ':transaction_id' => $transactionId,
                     ':transaction_type' => $form['transaction_type'],
-                    ':member_id' => $form['member_id'],
+                    ':member_id' => $isWalkIn ? null : $form['member_id'],
+                    ':visitor_name' => $isWalkIn ? $form['visitor_name'] : null,
+                    ':visitor_check_in' => $isWalkIn ? date('Y-m-d H:i:s') : null,
                     ':membership_id' => $membershipId,
                     ':amount' => $total,
                     ':payment_method' => $form['payment_method'],
@@ -240,6 +249,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <form method="POST" novalidate id="paymentForm">
         <?= csrfField() ?>
 
+        <div class="payment-wizard-steps" aria-label="Payment progress">
+            <span class="is-current" data-payment-step-label><strong>1</strong><span>Customer</span></span>
+            <span data-payment-step-label><strong>2</strong><span>Pass or plan</span></span>
+            <span data-payment-step-label><strong>3</strong><span>Payment</span></span>
+        </div>
+        <div class="payment-wizard-progress" role="progressbar" aria-label="Payment progress" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1"><span id="paymentWizardProgress"></span></div>
+
+        <section class="payment-wizard-panel" data-payment-panel aria-label="Customer details">
+        <div class="payment-wizard-heading"><h2>Who is this payment for?</h2><p>Choose the transaction, then identify the member or visitor.</p></div>
+
         <fieldset class="transaction-type-fieldset">
             <legend>Transaction Type</legend>
             <div class="transaction-type-options">
@@ -256,11 +275,20 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         </fieldset>
 
-        <div class="payment-field">
+        <div class="payment-field payment-member-field" <?= $form['transaction_type'] === 'walk_in_pass' ? 'hidden' : '' ?>>
             <label for="memberSearch">Select Member <span class="required">*</span></label>
             <input type="text" id="memberSearch" placeholder="Search and select member..." autocomplete="off" value="<?= sanitize($selectedMemberName) ?>">
             <input type="hidden" name="member_id" id="memberIdHidden" value="<?= (int)$form['member_id'] ?>">
         </div>
+
+        <div class="payment-field payment-visitor-field" <?= $form['transaction_type'] !== 'walk_in_pass' ? 'hidden' : '' ?>>
+            <label for="visitorName">Visitor Name <span class="required">*</span></label>
+            <input type="text" id="visitorName" name="visitor_name" maxlength="100" autocomplete="name" placeholder="Enter visitor name" value="<?= sanitize($form['visitor_name']) ?>">
+        </div>
+        </section>
+
+        <section class="payment-wizard-panel" data-payment-panel aria-label="Pass or membership plan">
+        <div class="payment-wizard-heading"><h2>Choose the pass or plan</h2><p>Set the price or membership term for this transaction.</p></div>
 
         <div class="payment-field payment-plan-field" <?= $form['transaction_type'] !== 'membership_renewal' ? 'hidden' : '' ?>>
             <label for="planSelect">Membership Plan <span class="required">*</span></label>
@@ -286,6 +314,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <label for="startDate">Membership Start Date <span class="required">*</span></label>
             <input type="date" id="startDate" name="start_date" value="<?= sanitize($form['start_date']) ?>">
         </div>
+        </section>
+
+        <section class="payment-wizard-panel" data-payment-panel aria-label="Payment details">
+        <div class="payment-wizard-heading"><h2>Review and collect payment</h2><p>Confirm the date, amount, and payment method before generating the receipt.</p></div>
 
         <div class="payment-field">
             <label for="paymentDate">Payment Date</label>
@@ -323,9 +355,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <label for="notes">Notes (Optional)</label>
             <textarea id="notes" name="notes" rows="2" placeholder="Additional transaction details"><?= sanitize($form['notes']) ?></textarea>
         </div>
+        </section>
 
         <div class="payment-form-actions">
-            <button type="submit" class="btn btn-primary"><i data-lucide="receipt"></i> Confirm Payment &amp; Generate Invoice</button>
+            <button type="button" class="btn btn-ghost" id="paymentWizardBack" hidden><i data-lucide="arrow-left"></i> Back</button>
+            <button type="button" class="btn btn-primary" id="paymentWizardNext">Continue <i data-lucide="arrow-right"></i></button>
+            <button type="submit" class="btn btn-primary" id="paymentWizardSubmit" hidden><i data-lucide="receipt"></i> Confirm Payment &amp; Generate Invoice</button>
             <a href="<?= BASE_URL ?>/pages/payments/index.php" class="btn btn-secondary">Cancel</a>
         </div>
     </form>
@@ -340,16 +375,82 @@ document.addEventListener('DOMContentLoaded', () => {
     const packagePrice = document.getElementById('packagePrice');
     const discount = document.getElementById('discount');
     const tendered = document.getElementById('amountTendered');
+    const panels = [...form.querySelectorAll('[data-payment-panel]')];
+    const labels = [...form.querySelectorAll('[data-payment-step-label]')];
+    const back = document.getElementById('paymentWizardBack');
+    const next = document.getElementById('paymentWizardNext');
+    const submit = document.getElementById('paymentWizardSubmit');
+    const memberId = document.getElementById('memberIdHidden');
+    const startDate = document.getElementById('startDate');
+    let step = 0;
     const money = value => '\u20B1' + Math.max(0, Number(value) || 0).toFixed(2);
+
+    function showStep(index) {
+        step = Math.max(0, Math.min(index, panels.length - 1));
+        panels.forEach((panel, i) => { panel.hidden = i !== step; });
+        labels.forEach((label, i) => {
+            label.classList.toggle('is-current', i === step);
+            label.classList.toggle('is-complete', i < step);
+        });
+        back.hidden = step === 0;
+        next.hidden = step === panels.length - 1;
+        submit.hidden = step !== panels.length - 1;
+        document.querySelector('.payment-wizard-progress').setAttribute('aria-valuenow', String(step + 1));
+        document.getElementById('paymentWizardProgress').style.width = `${((step + 1) / panels.length) * 100}%`;
+    }
+
+    function validateStep(index) {
+        const isMembership = form.querySelector('input[name="transaction_type"]:checked').value === 'membership_renewal';
+        if (index === 0 && memberId.value) document.getElementById('memberSearch').setCustomValidity('');
+        if (index === 0 && isMembership && !memberId.value) {
+            document.getElementById('memberSearch').setCustomValidity('Select an active member.');
+            document.getElementById('memberSearch').reportValidity();
+            return false;
+        }
+        if (index === 1) {
+            const subtotal = isMembership ? Number(plan.options[plan.selectedIndex].dataset.price || 0) : Number(packagePrice.value || 0);
+            if (subtotal <= 0) {
+                (isMembership ? plan : packagePrice).setCustomValidity('Enter a valid plan or walk-in price.');
+                (isMembership ? plan : packagePrice).reportValidity();
+                return false;
+            }
+        }
+        for (const field of panels[index].querySelectorAll('input, select, textarea')) {
+            if (field.closest('[hidden]') || field.type === 'hidden' || field.type === 'radio') continue;
+            if (!field.checkValidity()) {
+                field.reportValidity();
+                return false;
+            }
+        }
+        if (index === 2) {
+            const subtotal = isMembership ? Number(plan.options[plan.selectedIndex].dataset.price || 0) : Number(packagePrice.value || 0);
+            const total = subtotal - Number(discount.value || 0);
+            if (total <= 0) {
+                discount.setCustomValidity('Discount must be less than the price.');
+                discount.reportValidity();
+                return false;
+            }
+            if (Number(tendered.value) < total) {
+                tendered.setCustomValidity('Amount tendered must cover the total due.');
+                tendered.reportValidity();
+                return false;
+            }
+        }
+        return true;
+    }
 
     function updateCheckout() {
         const type = form.querySelector('input[name="transaction_type"]:checked').value;
         const isMembership = type === 'membership_renewal';
         document.querySelector('.payment-plan-field').hidden = !isMembership;
+        document.querySelector('.payment-member-field').hidden = !isMembership;
+        document.querySelector('.payment-visitor-field').hidden = isMembership;
+        document.getElementById('visitorName').required = !isMembership;
         document.querySelector('.payment-package-price').hidden = isMembership;
         document.querySelector('.payment-membership-date').hidden = !isMembership;
         plan.required = isMembership;
         packagePrice.required = !isMembership;
+        startDate.required = isMembership;
         const selectedPlan = plan.options[plan.selectedIndex];
         const subtotal = isMembership ? Number(selectedPlan.dataset.price || 0) : Number(packagePrice.value || 0);
         const discountAmount = Number(discount.value || 0);
@@ -368,7 +469,20 @@ document.addEventListener('DOMContentLoaded', () => {
     form.querySelectorAll('input[name="transaction_type"]').forEach(input => input.addEventListener('change', updateCheckout));
     [plan, packagePrice, discount, tendered].forEach(input => input.addEventListener('input', updateCheckout));
     plan.addEventListener('change', updateCheckout);
+    form.querySelectorAll('input, select').forEach(input => input.addEventListener('input', () => input.setCustomValidity('')));
+    next.addEventListener('click', () => { if (validateStep(step)) showStep(step + 1); });
+    back.addEventListener('click', () => showStep(step - 1));
+    form.addEventListener('submit', event => {
+        for (let index = 0; index < panels.length; index++) {
+            showStep(index);
+            if (!validateStep(index)) {
+                event.preventDefault();
+                return;
+            }
+        }
+    });
     updateCheckout();
+    showStep(0);
 });
 </script>
 

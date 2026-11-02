@@ -1,7 +1,7 @@
 <?php
 /**
  * 707 GYM – Dashboard
- * Main overview page with KPIs, charts, upcoming expirations, and recent activity.
+ * Record keeping shortcuts, upcoming expirations, and recent activity.
  */
 
 require_once __DIR__ . '/../config/config.php';
@@ -13,20 +13,12 @@ requireAuth();
 
 $db = Database::getConnection();
 
-// ── KPI Queries ──────────────────────────────────────────────────────────────
-$totalMembers = (int) $db->query("SELECT COUNT(*) FROM members WHERE status = 'active'")->fetchColumn();
-
-$activeMs     = (int) $db->query("SELECT COUNT(*) FROM memberships WHERE status = 'active'")->fetchColumn();
-$expiredMs    = (int) $db->query("SELECT COUNT(*) FROM memberships WHERE status = 'expired'")->fetchColumn();
-
-$todayAttendance = (int) $db->query(
-    "SELECT COUNT(*) FROM attendance WHERE date = CURDATE()"
-)->fetchColumn();
-
-$monthRevenue = (float) $db->query(
-    "SELECT COALESCE(SUM(amount),0) FROM payments
-     WHERE MONTH(payment_date) = MONTH(NOW()) AND YEAR(payment_date) = YEAR(NOW())
-       AND status = 'paid'"
+$activeMembers = (int) $db->query("SELECT COUNT(*) FROM members WHERE status = 'active'")->fetchColumn();
+$activeMemberships = (int) $db->query("SELECT COUNT(*) FROM memberships WHERE status = 'active' AND end_date >= CURDATE()")->fetchColumn();
+$todayCheckIns = (int) $db->query("SELECT COUNT(*) FROM attendance WHERE date = CURDATE()")->fetchColumn();
+$expiringSoon = (int) $db->query(
+    "SELECT COUNT(*) FROM memberships
+     WHERE status = 'active' AND end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)"
 )->fetchColumn();
 
 // ── Upcoming Expirations (next 7 days) ───────────────────────────────────────
@@ -45,39 +37,12 @@ $upcomingExpirations = $upcomingStmt->fetchAll();
 // ── Recent Transactions ───────────────────────────────────────────────────────
 $recentPayments = $db->query(
     "SELECT p.transaction_id, p.amount, p.payment_method, p.payment_date,
-            m.first_name, m.last_name,
-            pl.name AS plan_name
+            COALESCE(p.visitor_name, CONCAT(m.first_name, ' ', m.last_name)) AS payer_name
      FROM payments p
-     JOIN members m  ON p.member_id = m.id
-     JOIN membership_plans pl ON p.membership_id = (
-         SELECT id FROM memberships WHERE member_id = p.member_id LIMIT 1
-     )
+     LEFT JOIN members m ON p.member_id = m.id
      ORDER BY p.created_at DESC
      LIMIT 5"
 )->fetchAll();
-
-// ── Monthly Revenue Chart Data (last 12 months) ───────────────────────────────
-$revenueRows = $db->query(
-    "SELECT DATE_FORMAT(payment_date,'%b %Y') AS month_label,
-            YEAR(payment_date) AS yr,
-            MONTH(payment_date) AS mo,
-            COALESCE(SUM(amount),0) AS total
-     FROM payments
-     WHERE payment_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-       AND status = 'paid'
-     GROUP BY yr, mo
-     ORDER BY yr ASC, mo ASC"
-)->fetchAll();
-
-$revenueLabels  = array_column($revenueRows, 'month_label');
-$revenueData    = array_column($revenueRows, 'total');
-
-// ── Membership Status Doughnut Data ──────────────────────────────────────────
-$msStatus = $db->query(
-    "SELECT status, COUNT(*) AS cnt FROM memberships GROUP BY status"
-)->fetchAll();
-$donutLabels = array_column($msStatus, 'status');
-$donutData   = array_column($msStatus, 'cnt');
 
 $pageTitle = 'Dashboard';
 require_once __DIR__ . '/../includes/header.php';
@@ -88,40 +53,39 @@ require_once __DIR__ . '/../includes/sidebar.php';
 <div class="page-header dashboard-page-header">
     <div class="page-header-left">
         <h1>Dashboard</h1>
-        <p>Welcome back, <?= sanitize(ADMIN_DISPLAY_NAME) ?>. Here is what's happening today.</p>
+        <p>Welcome back, <?= sanitize(ADMIN_DISPLAY_NAME) ?>. Manage your gym records here.</p>
     </div>
 </div>
 
-<!-- KPI Cards -->
-<div class="kpi-grid">
-    <div class="kpi-card">
+<div class="kpi-grid dashboard-record-grid" aria-label="Current record counts">
+    <a class="kpi-card" href="<?= BASE_URL ?>/pages/members/index.php">
         <div class="kpi-icon"><i data-lucide="users"></i></div>
         <div class="kpi-body">
-            <div class="kpi-value"><?= number_format($totalMembers) ?></div>
-            <div class="kpi-label">Total Active Members</div>
+            <div class="kpi-value"><?= number_format($activeMembers) ?></div>
+            <div class="kpi-label">Active Members</div>
         </div>
-    </div>
-    <div class="kpi-card">
+    </a>
+    <a class="kpi-card" href="<?= BASE_URL ?>/pages/memberships/index.php">
         <div class="kpi-icon"><i data-lucide="credit-card"></i></div>
         <div class="kpi-body">
-            <div class="kpi-value"><?= number_format($activeMs) ?></div>
-            <div class="kpi-label">Active Memberships</div>
+            <div class="kpi-value"><?= number_format($activeMemberships) ?></div>
+            <div class="kpi-label">Current Memberships</div>
         </div>
-    </div>
-    <div class="kpi-card">
+    </a>
+    <a class="kpi-card" href="<?= BASE_URL ?>/pages/attendance/index.php">
         <div class="kpi-icon"><i data-lucide="calendar-check"></i></div>
         <div class="kpi-body">
-            <div class="kpi-value"><?= number_format($todayAttendance) ?></div>
-            <div class="kpi-label">Today's Attendance</div>
+            <div class="kpi-value"><?= number_format($todayCheckIns) ?></div>
+            <div class="kpi-label">Today's Check-ins</div>
         </div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-icon"><i data-lucide="dollar-sign"></i></div>
+    </a>
+    <a class="kpi-card" href="<?= BASE_URL ?>/pages/memberships/index.php">
+        <div class="kpi-icon"><i data-lucide="calendar-clock"></i></div>
         <div class="kpi-body">
-            <div class="kpi-value"><?= formatPhilippineCurrency($monthRevenue) ?></div>
-            <div class="kpi-label">Monthly Revenue</div>
+            <div class="kpi-value"><?= number_format($expiringSoon) ?></div>
+            <div class="kpi-label">Expiring in 7 Days</div>
         </div>
-    </div>
+    </a>
 </div>
 
 <!-- Quick action dock -->
@@ -151,29 +115,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </a>
     </nav>
 </section>
-
-<!-- Charts Row -->
-<div class="charts-grid">
-    <!-- Revenue Line Chart -->
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Revenue – Last 12 Months</span>
-        </div>
-        <div style="height:260px; position:relative;">
-            <canvas id="revenueChart"></canvas>
-        </div>
-    </div>
-
-    <!-- Membership Status Doughnut -->
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Membership Status</span>
-        </div>
-        <div style="height:260px; position:relative;">
-            <canvas id="membershipDonut"></canvas>
-        </div>
-    </div>
-</div>
 
 <!-- Upcoming Expirations -->
 <div class="card mb-3">
@@ -238,7 +179,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
             <tbody>
                 <?php foreach ($recentPayments as $pmt): ?>
                 <tr>
-                    <td><?= sanitize($pmt['first_name'] . ' ' . $pmt['last_name']) ?></td>
+                    <td><?= sanitize($pmt['payer_name']) ?></td>
                     <td><?= formatPhilippineCurrency($pmt['amount']) ?></td>
                     <td><span class="badge badge-info"><?= sanitize($pmt['payment_method']) ?></span></td>
                     <td><?= formatDate($pmt['payment_date']) ?></td>
@@ -249,27 +190,5 @@ require_once __DIR__ . '/../includes/sidebar.php';
     </div>
     <?php endif; ?>
 </div>
-
-<!-- Chart init -->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Revenue line chart
-    createLineChart(
-        'revenueChart',
-        <?= json_encode($revenueLabels) ?>,
-        [{
-            label: 'Revenue (PHP)',
-            data: <?= json_encode($revenueData) ?>,
-        }]
-    );
-
-    // Membership doughnut
-    createDoughnutChart(
-        'membershipDonut',
-        <?= json_encode(array_map('ucfirst', $donutLabels)) ?>,
-        <?= json_encode(array_map('intval', $donutData)) ?>
-    );
-});
-</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

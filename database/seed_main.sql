@@ -3,7 +3,6 @@
 USE `gym_707`;
 
 START TRANSACTION;
-DELETE FROM `branch_analytics_snapshots`;
 DELETE FROM `attendance`;
 DELETE FROM `payments`;
 DELETE FROM `memberships`;
@@ -14,9 +13,6 @@ DELETE FROM `membership_plans`;
 
 REPLACE INTO `admins` (`id`, `username`, `password`, `last_login`, `created_at`)
 VALUES (1, 'admin', '$2y$10$HOv7BsuocpSg7h2IFlyeUOllgxyvTCGRJpa4PMRojedG3x4uVzRMq', NULL, NOW());
-
-REPLACE INTO `branch_analytics_settings` (`id`, `branch_name`)
-VALUES (1, '707_GYM_MAIN');
 
 REPLACE INTO `membership_plans` (`id`, `name`, `description`, `duration_days`, `price`, `status`) VALUES
 (1, 'Monthly Unlimited', 'Full gym access for 30 days', 30, 800.00, 'active'),
@@ -63,6 +59,10 @@ VALUES
 (17, 11, 1, '2026-10-19', '2026-11-18', 'active', '2026-10-19 09:00:00', NOW()),
 (18, 12, 1, '2026-07-20', '2026-08-19', 'expired', '2026-07-20 09:00:00', NOW());
 
+-- Keep dashboard counts accurate on the day this mock data is loaded.
+UPDATE `memberships`
+SET `status` = CASE WHEN `end_date` < CURDATE() THEN 'expired' ELSE 'active' END;
+
 REPLACE INTO `payments`
     (`transaction_id`, `transaction_type`, `member_id`, `membership_id`, `amount`,
      `payment_method`, `notes`, `recorded_by`, `payment_date`, `status`, `created_at`)
@@ -88,12 +88,15 @@ VALUES
 
 -- Add a paid walk-in transaction every five days from July 2026 through today.
 REPLACE INTO `payments`
-    (`transaction_id`, `transaction_type`, `member_id`, `membership_id`, `amount`,
+    (`transaction_id`, `transaction_type`, `member_id`, `visitor_name`, `visitor_check_in`, `visitor_check_out`, `membership_id`, `amount`,
      `payment_method`, `notes`, `recorded_by`, `payment_date`, `status`, `created_at`)
 SELECT
     CONCAT('TXN-MAIN-W-', DATE_FORMAT(day_rows.visit_date, '%Y%m%d')),
     'walk_in_pass',
-    ((day_rows.day_offset * 5) % 12) + 1,
+    NULL,
+    CONCAT('Sample Visitor ', DATE_FORMAT(day_rows.visit_date, '%Y%m%d')),
+    IF(day_rows.visit_date = CURDATE(), NOW(), TIMESTAMP(day_rows.visit_date, '12:00:00')),
+    IF(day_rows.visit_date = CURDATE(), NULL, TIMESTAMP(day_rows.visit_date, '14:00:00')),
     NULL,
     400.00 + (day_rows.day_offset MOD 5) * 50.00,
     CASE day_rows.day_offset MOD 4

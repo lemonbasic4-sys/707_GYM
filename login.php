@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="auth-card">
     <!-- Logo -->
     <div class="auth-logo">
-        <img class="auth-logo-image" src="<?= BASE_URL ?>/assets/img/gym_logo.png" alt="707 GYM logo">
+        <img class="auth-logo-image" src="<?= BASE_URL ?>/assets/img/official_gym_logo.jpg" alt="Stoner 707 GYM logo">
     </div>
 
     <!-- Error alert -->
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
 
     <div class="auth-footer">
-        <p>Gym Management System & Analytics</p>
+        <p>Gym Record Keeping System</p>
     </div>
 </div>
 

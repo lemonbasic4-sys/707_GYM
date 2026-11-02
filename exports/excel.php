@@ -7,79 +7,14 @@ require_once __DIR__ . '/../config/session.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../includes/branch_analytics.php';
 
 requireAuth();
 
 $pdo = Database::getConnection();
 $type = $_GET['type'] ?? 'members';
-
-if ($type === 'branch_analytics') {
-    $month = isset($_GET['month']) && is_string($_GET['month']) ? $_GET['month'] : date('Y-m');
-    if (!isValidAnalyticsMonth($month)) {
-        http_response_code(400);
-        exit('Invalid analytics month.');
-    }
-    $branchName = getLocalBranchName($pdo);
-    $metrics = getCurrentBranchAnalytics($pdo, $month);
-
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $branchName . '_' . $month . '_analytics.csv"');
-    $output = fopen('php://output', 'w');
-    fputcsv($output, [
-        'branch_name', 'period_month', 'captured_at', 'revenue',
-        'new_members', 'active_members', 'attendance_visits', 'active_memberships',
-    ]);
-    fputcsv($output, [
-        $branchName, $month, date('Y-m-d H:i:s'), number_format($metrics['revenue'], 2, '.', ''),
-        $metrics['new_members'], $metrics['active_members'], $metrics['attendance_visits'],
-        $metrics['active_memberships'],
-    ]);
-    fclose($output);
-    exit;
-}
-
-if ($type === 'branch_data') {
-    if (!hasBranchAnalyticsSchema($pdo)) {
-        http_response_code(503);
-        exit('Apply the branch analytics migration before exporting branch data.');
-    }
-    $branchName = getLocalBranchName($pdo);
-    $capturedAt = date('Y-m-d H:i:s');
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $branchName . '_' . date('Ymd_His') . '_data.csv"');
-    $output = fopen('php://output', 'w');
-    if ($output === false) {
-        throw new RuntimeException('Unable to create branch data export.');
-    }
-
-    fputcsv($output, ['record_type', 'branch_name', 'captured_at', 'record_id', 'payload_json']);
-    fputcsv($output, [
-        'manifest', $branchName, $capturedAt, 'manifest',
-        json_encode(['format_version' => 1], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-    ]);
-
-    $exportTables = [
-        'members' => "SELECT id, first_name, last_name, phone, gender, date_of_birth, status, created_at, updated_at FROM members ORDER BY id",
-        'membership_plans' => "SELECT id, name, description, duration_days, price, status, created_at FROM membership_plans ORDER BY id",
-        'memberships' => "SELECT id, member_id, plan_id, start_date, end_date, status, created_at, updated_at FROM memberships ORDER BY id",
-        'attendance' => "SELECT id, member_id, check_in, check_out, date, created_at FROM attendance ORDER BY id",
-        'payments' => "SELECT id, transaction_id, transaction_type, member_id, membership_id, amount, payment_method, notes, payment_date, status, created_at FROM payments ORDER BY id",
-    ];
-    foreach ($exportTables as $recordType => $query) {
-        $records = $pdo->query($query);
-        while ($record = $records->fetch(PDO::FETCH_ASSOC)) {
-            fputcsv($output, [
-                $recordType,
-                $branchName,
-                $capturedAt,
-                (string) $record['id'],
-                json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            ]);
-        }
-    }
-    fclose($output);
-    exit;
+if (!in_array($type, ['members', 'payments'], true)) {
+    http_response_code(400);
+    exit('Unsupported export type.');
 }
 
 $vendorAutoload = BASE_PATH . '/vendor/autoload.php';
@@ -96,9 +31,9 @@ if ($hasSpreadsheet && class_exists('PhpOffice\PhpSpreadsheet\Spreadsheet')) {
                                 FROM members m ORDER BY m.created_at DESC")->fetchAll(PDO::FETCH_NUM);
         $sheet->fromArray($members, NULL, 'A2');
     } elseif ($type === 'payments') {
-        $sheet->fromArray(['Transaction ID', 'Type', 'Date', 'Member', 'Amount', 'Method', 'Status'], NULL, 'A1');
-        $payments = $pdo->query("SELECT p.transaction_id, p.transaction_type, p.payment_date, CONCAT(m.first_name, ' ', m.last_name), p.amount, p.payment_method, p.status
-                                 FROM payments p JOIN members m ON p.member_id = m.id ORDER BY p.payment_date DESC")->fetchAll(PDO::FETCH_NUM);
+        $sheet->fromArray(['Transaction ID', 'Type', 'Date', 'Name', 'Amount', 'Method', 'Status'], NULL, 'A1');
+        $payments = $pdo->query("SELECT p.transaction_id, p.transaction_type, p.payment_date, COALESCE(p.visitor_name, CONCAT(m.first_name, ' ', m.last_name)), p.amount, p.payment_method, p.status
+                                 FROM payments p LEFT JOIN members m ON p.member_id = m.id ORDER BY p.payment_date DESC")->fetchAll(PDO::FETCH_NUM);
         $sheet->fromArray($payments, NULL, 'A2');
     }
 
@@ -121,9 +56,9 @@ if ($hasSpreadsheet && class_exists('PhpOffice\PhpSpreadsheet\Spreadsheet')) {
             fputcsv($output, $m);
         }
     } elseif ($type === 'payments') {
-        fputcsv($output, ['Transaction ID', 'Type', 'Date', 'Member', 'Amount', 'Method', 'Status']);
-        $payments = $pdo->query("SELECT p.transaction_id, p.transaction_type, p.payment_date, CONCAT(m.first_name, ' ', m.last_name), p.amount, p.payment_method, p.status
-                                 FROM payments p JOIN members m ON p.member_id = m.id ORDER BY p.payment_date DESC")->fetchAll(PDO::FETCH_NUM);
+        fputcsv($output, ['Transaction ID', 'Type', 'Date', 'Name', 'Amount', 'Method', 'Status']);
+        $payments = $pdo->query("SELECT p.transaction_id, p.transaction_type, p.payment_date, COALESCE(p.visitor_name, CONCAT(m.first_name, ' ', m.last_name)), p.amount, p.payment_method, p.status
+                                 FROM payments p LEFT JOIN members m ON p.member_id = m.id ORDER BY p.payment_date DESC")->fetchAll(PDO::FETCH_NUM);
         foreach ($payments as $p) {
             fputcsv($output, $p);
         }
