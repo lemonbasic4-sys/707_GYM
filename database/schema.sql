@@ -1,6 +1,6 @@
 -- 707 GYM Database Schema
 -- Centralized Gym Record-Keeping and Management System
-
+drop database if exists `gym_707`;
 CREATE DATABASE IF NOT EXISTS `gym_707` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `gym_707`;
 

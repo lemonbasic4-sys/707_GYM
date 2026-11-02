@@ -60,6 +60,7 @@ function createDatabaseBackup(PDO $pdo, string $type = 'manual', bool $skipIfExi
             . '-- Generated: ' . $now->format('Y-m-d H:i:s e (P)') . "\n"
             . '-- Type: ' . $type . "\n"
             . '-- Server: ' . str_replace(["\r", "\n"], ' ', $serverVersion) . "\n\n"
+            . 'USE `' . str_replace('`', '``', DB_NAME) . "`;\n"
             . "SET FOREIGN_KEY_CHECKS=0;\n\n";
         writeBackupChunk($handle, $header);
 
@@ -171,6 +172,12 @@ function importDatabaseSql(PDO $pdo, string $sql): int
         foreach ($statements as $statement) {
             $normalized = ltrim($statement);
             if (preg_match('/^\/\*!/', $normalized)) {
+                continue;
+            }
+            if (preg_match('/^USE\s+`((?:``|[^`])+)`$/i', $normalized, $useMatch)) {
+                if (str_replace('``', '`', $useMatch[1]) !== DB_NAME) {
+                    throw new RuntimeException('The SQL import references a different database and cannot be applied.');
+                }
                 continue;
             }
             if (!preg_match('/^(?:SET\b|DROP\s+TABLE\b|CREATE\s+TABLE\b|ALTER\s+TABLE\b|INSERT\s+INTO\b|REPLACE\s+INTO\b|LOCK\s+TABLES\b|UNLOCK\s+TABLES\b|START\s+TRANSACTION\b|COMMIT\b|ROLLBACK\b)/i', $normalized)) {
