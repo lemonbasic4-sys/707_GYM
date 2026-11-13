@@ -16,9 +16,10 @@ $db = Database::getConnection();
 $activeMembers = (int) $db->query("SELECT COUNT(*) FROM members WHERE status = 'active'")->fetchColumn();
 $activeMemberships = (int) $db->query("SELECT COUNT(*) FROM memberships WHERE status = 'active' AND end_date >= CURDATE()")->fetchColumn();
 $todayCheckIns = (int) $db->query("SELECT COUNT(*) FROM attendance WHERE date = CURDATE()")->fetchColumn();
-$expiringSoon = (int) $db->query(
-    "SELECT COUNT(*) FROM memberships
-     WHERE status = 'active' AND end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)"
+$todayWalkIns = (int) $db->query(
+    "SELECT COUNT(*) FROM payments
+     WHERE transaction_type = 'walk_in_pass'
+       AND (payment_date = CURDATE() OR DATE(visitor_check_in) = CURDATE())"
 )->fetchColumn();
 
 // ── Upcoming Expirations (next 7 days) ───────────────────────────────────────
@@ -42,7 +43,8 @@ $recentPayments = $db->query(
      LEFT JOIN members m ON p.member_id = m.id
      ORDER BY p.created_at DESC
      LIMIT 5"
-)->fetchAll();
+);
+$recentPayments = $recentPayments->fetchAll();
 
 $pageTitle = 'Dashboard';
 require_once __DIR__ . '/../includes/header.php';
@@ -79,11 +81,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
             <div class="kpi-label">Today's Check-ins</div>
         </div>
     </a>
-    <a class="kpi-card" href="<?= BASE_URL ?>/pages/memberships/index.php">
-        <div class="kpi-icon"><i data-lucide="calendar-clock"></i></div>
+    <a class="kpi-card" href="<?= BASE_URL ?>/pages/attendance/walk-ins.php">
+        <div class="kpi-icon"><i data-lucide="user-round"></i></div>
         <div class="kpi-body">
-            <div class="kpi-value"><?= number_format($expiringSoon) ?></div>
-            <div class="kpi-label">Expiring in 7 Days</div>
+            <div class="kpi-value"><?= number_format($todayWalkIns) ?></div>
+            <div class="kpi-label">Today's Walk-ins</div>
         </div>
     </a>
 </div>
