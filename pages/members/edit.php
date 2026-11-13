@@ -204,9 +204,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <div class="member-field">
                     <span class="member-field-icon"><i data-lucide="badge-check"></i></span>
                     <div class="member-field-content">
-                        <label>Status</label>
+                        <label>Profile Availability</label>
                         <select name="status">
-                            <option value="active"   <?= $member['status'] === 'active'   ? 'selected' : '' ?>>Active</option>
+                            <option value="active"   <?= $member['status'] === 'active'   ? 'selected' : '' ?>>Available</option>
                             <option value="archived" <?= $member['status'] === 'archived' ? 'selected' : '' ?>>Archived</option>
                         </select>
                     </div>

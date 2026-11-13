@@ -13,6 +13,9 @@ requireAuth();
 $db       = Database::getConnection();
 $search   = trim($_GET['search']   ?? '');
 $method   = $_GET['method']        ?? '';
+$category = $_GET['category']      ?? '';
+$categories = ['walk_in_pass' => 'Walk-in', 'membership_renewal' => 'Membership', 'member_visit' => 'Daily Member Fee'];
+if (!isset($categories[$category])) $category = '';
 $dateFrom = $_GET['date_from']     ?? date('Y-m-01');
 $dateTo   = $_GET['date_to']       ?? date('Y-m-d');
 $page     = max(1, (int)($_GET['page'] ?? 1));
@@ -31,10 +34,11 @@ if ($search !== '') {
 if ($method)        { $where[] = 'p.payment_method = :pm'; $params[':pm'] = $method; }
 if ($dateFrom)      { $where[] = 'p.payment_date >= :df'; $params[':df'] = $dateFrom; }
 if ($dateTo)        { $where[] = 'p.payment_date <= :dt'; $params[':dt'] = $dateTo; }
+if ($category !== '') { $where[] = 'p.transaction_type = :category'; $params[':category'] = $category; }
 
 $whereSQL = implode(' AND ', $where);
 
-$cntStmt = $db->prepare("SELECT COUNT(*), COALESCE(SUM(p.amount),0) FROM payments p LEFT JOIN members m ON p.member_id=m.id WHERE {$whereSQL}");
+$cntStmt = $db->prepare("SELECT COUNT(*), COALESCE(SUM(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END),0) FROM payments p LEFT JOIN members m ON p.member_id=m.id WHERE {$whereSQL}");
 $cntStmt->execute($params);
 [$totalItems, $totalAmount] = $cntStmt->fetch(PDO::FETCH_NUM);
 $pagination = getPaginationData((int)$totalItems, $page);
@@ -60,7 +64,7 @@ $stmt->execute();
 $payments = $stmt->fetchAll();
 
 // Build export query string
-$exportQs = http_build_query(['type'=>'payments','date_from'=>$dateFrom,'date_to'=>$dateTo,'method'=>$method,'search'=>$search]);
+$exportQs = http_build_query(['type'=>'payments','date_from'=>$dateFrom,'date_to'=>$dateTo,'method'=>$method,'search'=>$search,'category'=>$category]);
 
 $pageTitle = 'Payment History';
 require_once __DIR__ . '/../../includes/header.php';
@@ -70,7 +74,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 <div class="page-header">
     <div class="page-header-left">
         <h1>Payment History</h1>
-        <p><?= number_format((int)$totalItems) ?> records &bull; Total: <?= formatPhilippineCurrency((float)$totalAmount) ?></p>
+        <p><?= number_format((int)$totalItems) ?> records &bull; Paid total: <?= formatPhilippineCurrency((float)$totalAmount) ?></p>
     </div>
     <div class="page-header-actions">
         <a href="<?= BASE_URL ?>/exports/pdf.php?<?= $exportQs ?>" class="btn btn-secondary" target="_blank">
@@ -84,6 +88,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <form method="GET" class="filter-bar payments-filter-bar payments-history-filter-bar">
     <input type="search" name="search" placeholder="Search member, visitor, txn..." value="<?= sanitize($search) ?>">
+    <select name="category">
+        <option value="">All Categories</option>
+        <?php foreach ($categories as $type => $label): ?><option value="<?= $type ?>" <?= $category === $type ? 'selected' : '' ?>><?= sanitize($label) ?></option><?php endforeach; ?>
+    </select>
     <select name="method">
         <option value="">All Methods</option>
         <option value="cash"          <?= $method==='cash'?'selected':'' ?>>Cash</option>
@@ -125,12 +133,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         </table>
     </div>
     <div class="payments-total-row">
-        <strong>Total: <?= formatPhilippineCurrency((float)$totalAmount) ?></strong>
+        <strong>Paid Total: <?= formatPhilippineCurrency((float)$totalAmount) ?></strong>
     </div>
     <?php if ($pagination['total_pages'] > 1): ?>
     <div class="pagination mt-2">
         <?php for ($i = max(1,$pagination['current_page']-2); $i <= min($pagination['total_pages'],$pagination['current_page']+2); $i++): ?>
-        <a href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&method=<?= urlencode($method) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>"
+        <a href="?page=<?= $i ?>&category=<?= urlencode($category) ?>&search=<?= urlencode($search) ?>&method=<?= urlencode($method) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>"
            class="page-link <?= $i===$pagination['current_page']?'active':'' ?>"><?= $i ?></a>
         <?php endfor; ?>
     </div>

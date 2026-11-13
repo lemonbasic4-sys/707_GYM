@@ -44,7 +44,7 @@ if ($activeStmt->fetchColumn()) {
 $plans    = $db->query("SELECT * FROM membership_plans WHERE status='active' ORDER BY name")->fetchAll();
 
 // Default start: day after expiry (or today)
-$defaultStart = $currentMs && $currentMs['end_date']
+$defaultStart = $currentMs && $currentMs['end_date'] >= date('Y-m-d')
     ? date('Y-m-d', strtotime($currentMs['end_date'] . ' +1 day'))
     : date('Y-m-d');
 
@@ -57,14 +57,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $payMethod = $_POST['payment_method']    ?? 'cash';
         $amount    = (float)($_POST['amount']    ?? 0);
 
-        if ($planId <= 0)  $errors[] = 'Plan required.';
+        if ($planId <= 0) $errors[] = 'Plan required.';
+        if (!in_array($payMethod, ['cash', 'gcash', 'bank_transfer', 'card'], true)) $errors[] = 'Invalid payment method.';
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$startDate) || !checkdate((int)substr($startDate, 5, 2), (int)substr($startDate, 8, 2), (int)substr($startDate, 0, 4))) $errors[] = 'Invalid start date.';
 
         if (empty($errors)) {
-            $planInfo = $db->prepare("SELECT * FROM membership_plans WHERE id=:id")->execute([':id'=>$planId]) ? null : null;
-            $planStmt = $db->prepare("SELECT * FROM membership_plans WHERE id=:id");
+            $planStmt = $db->prepare("SELECT * FROM membership_plans WHERE id=:id AND status='active'");
             $planStmt->execute([':id' => $planId]);
             $planInfo = $planStmt->fetch();
 
+            if (!$planInfo) $errors[] = 'Selected plan is unavailable.';
+            if ($planInfo && abs($amount - (float)$planInfo['price']) > 0.001) $errors[] = 'Amount must match the plan price.';
+
+            if (!$errors) {
             $endDate = date('Y-m-d', strtotime($startDate . ' +' . $planInfo['duration_days'] . ' days'));
 
             try {
@@ -107,6 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 $db->rollBack();
                 $errors[] = 'Failed: ' . $e->getMessage();
+            }
             }
         }
     }

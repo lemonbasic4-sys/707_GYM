@@ -33,9 +33,14 @@ if ($search !== '') {
     $params[':last_name'] = $searchTerm;
     $params[':phone'] = $searchTerm;
 }
-if (in_array($status, ['active', 'archived'], true)) {
-    $where[]  = 'm.status = :status';
-    $params[':status'] = $status;
+if ($status === 'archived') {
+    $where[] = "m.status = 'archived'";
+} elseif (in_array($status, ['active', 'pending'], true)) {
+    $where[] = "m.status = 'active'";
+    $where[] = ($status === 'active' ? 'EXISTS' : 'NOT EXISTS') . " (
+        SELECT 1 FROM memberships current_ms WHERE current_ms.member_id = m.id
+        AND current_ms.status = 'active' AND current_ms.start_date <= CURDATE()
+        AND current_ms.end_date >= CURDATE())";
 }
 
 $whereSQL = implode(' AND ', $where);
@@ -45,14 +50,18 @@ $countStmt = $db->prepare("SELECT COUNT(*) FROM members m WHERE {$whereSQL}");
 $countStmt->execute($params);
 $totalItems = (int) $countStmt->fetchColumn();
 
-$pagination = getPaginationData($totalItems, $page, DEFAULT_PER_PAGE);
+$pagination = getPaginationData($totalItems, $page, 10);
 
 // ── Fetch Members ─────────────────────────────────────────────────────────────
 $stmt = $db->prepare(
     "SELECT m.id, m.first_name, m.last_name, m.phone, m.photo,
             m.status, m.created_at,
-            ms.status AS membership_status,
-            ms.end_date
+            ms.status AS membership_status, ms.end_date,
+            CASE WHEN EXISTS (
+                SELECT 1 FROM memberships current_ms WHERE current_ms.member_id = m.id
+                AND current_ms.status = 'active' AND current_ms.start_date <= CURDATE()
+                AND current_ms.end_date >= CURDATE()
+            ) THEN 1 ELSE 0 END AS has_active_membership
      FROM members m
      LEFT JOIN memberships ms ON ms.id = (
          SELECT id FROM memberships WHERE member_id = m.id ORDER BY created_at DESC LIMIT 1
@@ -92,7 +101,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
            value="<?= sanitize($search) ?>">
     <select name="status">
         <option value="">All Statuses</option>
-        <option value="active"   <?= $status === 'active'   ? 'selected' : '' ?>>Active</option>
+        <option value="active"   <?= $status === 'active'   ? 'selected' : '' ?>>Active Membership</option>
+        <option value="pending"  <?= $status === 'pending'  ? 'selected' : '' ?>>Pending Membership</option>
         <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
     </select>
     <button type="submit" class="btn btn-secondary">Filter</button>
@@ -162,8 +172,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </td>
                     <td><?= $m['end_date'] ? formatDate($m['end_date']) : '—' ?></td>
                     <td>
-                        <span class="badge badge-<?= $m['status'] === 'active' ? 'success' : 'muted' ?>">
-                            <?= sanitize($m['status']) ?>
+                        <?php $displayStatus = $m['status'] === 'archived' ? 'Archived' : ((int)$m['has_active_membership'] === 1 ? 'Active' : 'Pending'); ?>
+                        <span class="badge badge-<?= $displayStatus === 'Active' ? 'success' : 'muted' ?>">
+                            <?= $displayStatus ?>
                         </span>
                     </td>
                     <td>

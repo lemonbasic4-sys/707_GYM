@@ -34,7 +34,7 @@ $form = [
     'member_id' => (int)($_POST['member_id'] ?? $_GET['member_id'] ?? 0),
     'visitor_name' => trim((string)($_POST['visitor_name'] ?? '')),
     'plan_id' => (int)($_POST['plan_id'] ?? 0),
-    'amount' => $_POST['amount'] ?? '',
+    'amount' => $_POST['amount'] ?? ($requestedType === 'walk_in_pass' ? '100' : ''),
     'discount' => $_POST['discount'] ?? '0',
     'payment_method' => $_POST['payment_method'] ?? 'cash',
     'amount_tendered' => $_POST['amount_tendered'] ?? '',
@@ -309,8 +309,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
         <div class="payment-field payment-package-price" <?= $form['transaction_type'] === 'membership_renewal' ? 'hidden' : '' ?>>
             <label for="packagePrice">Walk-in Price (PHP) <span class="required">*</span></label>
-            <input type="number" id="packagePrice" name="amount" min="0.01" step="0.01" placeholder="Enter walk-in price"
+            <input type="number" id="packagePrice" name="amount" min="0.01" step="0.01" placeholder="Regular walk-in: 100; active member: 70"
                 value="<?= sanitize((string)$form['amount']) ?>">
+            <span class="form-hint">Regular walk-in: ₱100. Any active membership: ₱70 per visit.</span>
         </div>
 
         <div class="payment-field payment-membership-date" <?= $form['transaction_type'] !== 'membership_renewal' ? 'hidden' : '' ?>>

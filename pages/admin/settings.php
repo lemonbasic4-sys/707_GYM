@@ -167,11 +167,23 @@ include BASE_PATH . '/includes/sidebar.php';
         <a href="?tab=backup" class="btn <?= $activeTab === 'backup' ? 'btn-primary' : 'btn-ghost' ?>">
             <i data-lucide="database"></i> Database Backup
         </a>
+        <a href="?tab=import" class="btn <?= $activeTab === 'import' ? 'btn-primary' : 'btn-ghost' ?>">
+            <i data-lucide="upload"></i> CSV Import
+        </a>
     </div>
 </div>
 
 <?php if ($activeTab === 'backup'): ?>
     <?php define('DATABASE_BACKUP_EMBEDDED', true); require BASE_PATH . '/pages/admin/backup.php'; ?>
+<?php elseif ($activeTab === 'import'): ?>
+<div class="card mb-4">
+    <div class="card-header"><span class="card-title">CSV Import</span></div>
+    <p class="text-muted">Upload member records or review previous imports.</p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;">
+        <a href="<?= BASE_URL ?>/pages/imports/index.php" class="btn btn-primary"><i data-lucide="upload"></i> Open CSV Import</a>
+        <a href="<?= BASE_URL ?>/pages/imports/history.php" class="btn btn-secondary"><i data-lucide="history"></i> Import History</a>
+    </div>
+</div>
 <?php else: ?>
 <div class="card mb-4">
     <?php if ($activeTab === 'profile'): ?>

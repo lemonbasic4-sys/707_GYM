@@ -13,7 +13,9 @@ requireAuth();
 
 $db = Database::getConnection();
 
-$activeMembers = (int) $db->query("SELECT COUNT(*) FROM members WHERE status = 'active'")->fetchColumn();
+$activeMembers = (int) $db->query("SELECT COUNT(*) FROM members m WHERE m.status = 'active' AND EXISTS (
+    SELECT 1 FROM memberships ms WHERE ms.member_id = m.id AND ms.status = 'active'
+    AND ms.start_date <= CURDATE() AND ms.end_date >= CURDATE())")->fetchColumn();
 $activeMemberships = (int) $db->query("SELECT COUNT(*) FROM memberships WHERE status = 'active' AND end_date >= CURDATE()")->fetchColumn();
 $todayCheckIns = (int) $db->query("SELECT COUNT(*) FROM attendance WHERE date = CURDATE()")->fetchColumn();
 $todayWalkIns = (int) $db->query(
@@ -44,6 +46,29 @@ $insideNow = $db->query(
        AND DATE(p.visitor_check_in) = CURDATE() AND p.visitor_check_out IS NULL
      ORDER BY arrived_at DESC"
 )->fetchAll();
+
+$hourlyVisits = array_fill(0, 24, 0);
+$hourlyRows = $db->query(
+    "SELECT HOUR(visit_time) AS visit_hour, COUNT(*) AS visits
+     FROM (
+         SELECT check_in AS visit_time FROM attendance
+         WHERE check_in >= CURDATE() - INTERVAL 29 DAY AND check_in < CURDATE() + INTERVAL 1 DAY
+         UNION ALL
+         SELECT visitor_check_in AS visit_time FROM payments
+         WHERE transaction_type = 'walk_in_pass' AND status = 'paid'
+           AND visitor_check_in >= CURDATE() - INTERVAL 29 DAY
+           AND visitor_check_in < CURDATE() + INTERVAL 1 DAY
+     ) visits_by_time
+     GROUP BY HOUR(visit_time)"
+)->fetchAll();
+foreach ($hourlyRows as $row) $hourlyVisits[(int)$row['visit_hour']] = (int)$row['visits'];
+$totalVisits = array_sum($hourlyVisits);
+$peakHour = array_search(max($hourlyVisits), $hourlyVisits, true);
+$chartMax = max(1, max($hourlyVisits));
+$chartPoints = [];
+foreach ($hourlyVisits as $hour => $visits) {
+    $chartPoints[] = round(44 + $hour * 28, 1) . ',' . round(194 - ($visits / $chartMax) * 148, 1);
+}
 
 // ── Upcoming Expirations (next 7 days) ───────────────────────────────────────
 $upcomingStmt = $db->query(
@@ -143,14 +168,20 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 <div class="dashboard-presence-grid">
     <section class="card" aria-labelledby="insideNowTitle">
-        <div class="card-header"><span id="insideNowTitle" class="card-title">Inside the Gym Now (<?= count($insideNow) ?>)</span><a href="<?= BASE_URL ?>/pages/attendance/index.php" class="btn btn-ghost btn-sm">Attendance</a></div>
+        <div class="card-header"><span id="insideNowTitle" class="card-title">Inside the Gym Now (<span id="insideNowCount"><?= count($insideNow) ?></span>)</span><a href="<?= BASE_URL ?>/pages/attendance/index.php" class="btn btn-ghost btn-sm">Attendance</a></div>
+        <div class="inside-now-filters" role="group" aria-label="Filter people inside the gym">
+            <button type="button" class="btn btn-primary btn-sm" data-inside-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-inside-filter="Member" aria-pressed="false">Members</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-inside-filter="Walk-in" aria-pressed="false">Walk-ins</button>
+        </div>
         <?php if (!$insideNow): ?>
             <p class="text-muted">No one is currently checked in today.</p>
         <?php else: ?>
             <div class="table-wrapper"><table><thead><tr><th>Name</th><th>Type</th><th>Checked In</th></tr></thead><tbody>
-            <?php foreach ($insideNow as $person): ?><tr><td><?= sanitize($person['person_name']) ?></td><td><?= sanitize($person['person_type']) ?></td><td><?= formatDate($person['arrived_at'], 'g:i A') ?></td></tr><?php endforeach; ?>
+            <?php foreach ($insideNow as $person): ?><tr data-inside-type="<?= sanitize($person['person_type']) ?>"><td><?= sanitize($person['person_name']) ?></td><td><?= sanitize($person['person_type']) ?></td><td><?= formatDate($person['arrived_at'], 'g:i A') ?></td></tr><?php endforeach; ?>
             </tbody></table></div>
         <?php endif; ?>
+        <p id="insideNowFilteredEmpty" class="text-muted" hidden>No one in this category is inside right now.</p>
     </section>
     <section class="card" aria-labelledby="topMembersTitle">
         <div class="card-header"><span id="topMembersTitle" class="card-title">Top Members by Check-ins</span><a href="<?= BASE_URL ?>/pages/attendance/history.php" class="btn btn-ghost btn-sm">History</a></div>
@@ -163,6 +194,53 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <?php endif; ?>
     </section>
 </div>
+
+<script>
+document.querySelectorAll('[data-inside-filter]').forEach(button => {
+    button.addEventListener('click', () => {
+        const filter = button.dataset.insideFilter;
+        let visible = 0;
+        document.querySelectorAll('[data-inside-type]').forEach(row => {
+            row.hidden = filter !== 'all' && row.dataset.insideType !== filter;
+            if (!row.hidden) visible++;
+        });
+        document.getElementById('insideNowCount').textContent = visible;
+        document.getElementById('insideNowFilteredEmpty').hidden = visible !== 0 || document.querySelectorAll('[data-inside-type]').length === 0;
+        document.querySelectorAll('[data-inside-filter]').forEach(option => {
+            const selected = option === button;
+            option.classList.toggle('btn-primary', selected);
+            option.classList.toggle('btn-ghost', !selected);
+            option.setAttribute('aria-pressed', String(selected));
+        });
+    });
+});
+</script>
+
+<section class="card dashboard-busy-hours mb-3" aria-labelledby="busyHoursTitle">
+    <div class="card-header"><span id="busyHoursTitle" class="card-title">Busiest Gym Hours</span><a href="<?= BASE_URL ?>/pages/attendance/history.php" class="btn btn-ghost btn-sm">Attendance History</a></div>
+    <p class="text-muted">Member check-ins and paid walk-in arrivals by hour, last 30 days (<?= number_format($totalVisits) ?> visits).</p>
+    <?php if ($totalVisits === 0): ?>
+        <div class="empty-state"><i data-lucide="chart-no-axes-combined"></i><h3>No visits recorded yet</h3><p>The graph will appear after check-ins are recorded.</p></div>
+    <?php else: ?>
+        <p class="dashboard-busy-peak">Peak arrival hour: <strong><?= date('g A', mktime((int)$peakHour, 0)) ?>–<?= date('g A', mktime((int)$peakHour + 1, 0)) ?></strong> (<?= $hourlyVisits[$peakHour] ?> visits)</p>
+        <div class="dashboard-busy-chart">
+            <svg viewBox="0 0 735 245" role="img" aria-label="Line graph of visits by arrival hour over the last 30 days">
+                <line x1="44" y1="46" x2="688" y2="46" class="chart-guide" />
+                <line x1="44" y1="120" x2="688" y2="120" class="chart-guide" />
+                <line x1="44" y1="194" x2="688" y2="194" class="chart-guide" />
+                <text x="8" y="50" class="chart-label"><?= $chartMax ?></text>
+                <text x="18" y="198" class="chart-label">0</text>
+                <polyline points="<?= implode(' ', $chartPoints) ?>" class="chart-line" />
+                <?php foreach ($hourlyVisits as $hour => $visits): ?>
+                    <circle cx="<?= 44 + $hour * 28 ?>" cy="<?= round(194 - ($visits / $chartMax) * 148, 1) ?>" r="4" class="chart-point"><title><?= date('g A', mktime($hour, 0)) ?>: <?= $visits ?> visit<?= $visits === 1 ? '' : 's' ?></title></circle>
+                <?php endforeach; ?>
+                <?php foreach ([0, 3, 6, 9, 12, 15, 18, 21, 23] as $hour): ?>
+                    <text x="<?= 44 + $hour * 28 ?>" y="224" text-anchor="middle" class="chart-label"><?= date('g A', mktime($hour, 0)) ?></text>
+                <?php endforeach; ?>
+            </svg>
+        </div>
+    <?php endif; ?>
+</section>
 
 <!-- Upcoming Expirations -->
 <div class="card mb-3">

@@ -39,6 +39,14 @@ $memberships = $db->prepare(
 );
 $memberships->execute([':mid' => $id]);
 $memberships = $memberships->fetchAll();
+$hasActiveMembership = false;
+foreach ($memberships as $membership) {
+    if ($membership['status'] === 'active' && $membership['start_date'] <= date('Y-m-d') && $membership['end_date'] >= date('Y-m-d')) {
+        $hasActiveMembership = true;
+        break;
+    }
+}
+$displayStatus = $member['status'] === 'archived' ? 'Archived' : ($hasActiveMembership ? 'Active' : 'Pending');
 
 // Attendance history (last 30)
 $attendance = $db->prepare(
@@ -142,8 +150,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <div class="page-header-left">
         <h1><?= sanitize($member['first_name'] . ' ' . $member['last_name']) ?></h1>
         <p>
-            <span class="badge badge-<?= $member['status'] === 'active' ? 'success' : 'muted' ?>">
-                <?= sanitize($member['status']) ?>
+            <span class="badge badge-<?= $displayStatus === 'Active' ? 'success' : 'muted' ?>">
+                <?= $displayStatus ?>
             </span>
         </p>
     </div>

@@ -66,13 +66,6 @@ $isDashboard = (str_contains($currentPath, 'dashboard') || rtrim(parse_url($curr
                 </a>
             </li>
             <li>
-                <a href="<?= BASE_URL ?>/pages/imports/index.php"
-                   class="nav-link <?= navActive('/imports/') ?>">
-                    <i data-lucide="upload" class="nav-icon"></i>
-                    <span>CSV Import</span>
-                </a>
-            </li>
-            <li>
                 <a href="<?= BASE_URL ?>/pages/admin/audit-log.php"
                    class="nav-link <?= navActive('/audit-log.php') ?>">
                     <i data-lucide="clipboard-list" class="nav-icon"></i>
@@ -84,7 +77,7 @@ $isDashboard = (str_contains($currentPath, 'dashboard') || rtrim(parse_url($curr
 
             <li>
                 <a href="<?= BASE_URL ?>/pages/admin/settings.php"
-                   class="nav-link <?= navActive('/settings.php') ?>">
+                   class="nav-link <?= navActive('/settings.php') ?: navActive('/imports/') ?>">
                     <i data-lucide="settings" class="nav-icon"></i>
                     <span>System</span>
                 </a>

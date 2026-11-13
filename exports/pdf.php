@@ -76,7 +76,22 @@ ob_start();
         </table>
     <?php elseif ($type === 'payments'): ?>
         <?php
-        $payments = $pdo->query("SELECT p.*, COALESCE(p.visitor_name, CONCAT(m.first_name, ' ', m.last_name)) AS payer_name FROM payments p LEFT JOIN members m ON p.member_id = m.id ORDER BY p.payment_date DESC LIMIT 100")->fetchAll();
+        $where = ['1=1'];
+        $params = [];
+        if (in_array($_GET['category'] ?? '', ['walk_in_pass', 'membership_renewal', 'member_visit'], true)) {
+            $where[] = 'p.transaction_type = :category'; $params[':category'] = $_GET['category'];
+        }
+        if (!empty($_GET['method'])) { $where[] = 'p.payment_method = :method'; $params[':method'] = $_GET['method']; }
+        if (!empty($_GET['date_from'])) { $where[] = 'p.payment_date >= :date_from'; $params[':date_from'] = $_GET['date_from']; }
+        if (!empty($_GET['date_to'])) { $where[] = 'p.payment_date <= :date_to'; $params[':date_to'] = $_GET['date_to']; }
+        if (!empty($_GET['search'])) {
+            $where[] = "(m.first_name LIKE :first OR m.last_name LIKE :last OR p.visitor_name LIKE :visitor OR p.transaction_id LIKE :txn)";
+            foreach ([':first', ':last', ':visitor', ':txn'] as $key) $params[$key] = '%' . $_GET['search'] . '%';
+        }
+        $stmt = $pdo->prepare("SELECT p.*, COALESCE(p.visitor_name, CONCAT(m.first_name, ' ', m.last_name)) AS payer_name
+            FROM payments p LEFT JOIN members m ON p.member_id = m.id WHERE " . implode(' AND ', $where) . " ORDER BY p.payment_date DESC");
+        $stmt->execute($params);
+        $payments = $stmt->fetchAll();
         ?>
         <table>
             <thead>
@@ -90,7 +105,7 @@ ob_start();
                 </tr>
             </thead>
             <tbody>
-                <?php $total = 0; foreach ($payments as $p): $total += $p['amount']; ?>
+                <?php $total = 0; foreach ($payments as $p): if ($p['status'] === 'paid') $total += $p['amount']; ?>
                     <tr>
                         <td><?= htmlspecialchars($p['transaction_id']) ?></td>
                         <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', $p['transaction_type']))) ?></td>

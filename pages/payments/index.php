@@ -14,6 +14,9 @@ $db       = Database::getConnection();
 $search   = trim($_GET['search']   ?? '');
 $method   = $_GET['method']        ?? '';
 $status   = $_GET['status']        ?? '';
+$category = $_GET['category']      ?? '';
+$categories = ['walk_in_pass' => 'Walk-in', 'membership_renewal' => 'Membership', 'member_visit' => 'Daily Member Fee'];
+if (!isset($categories[$category])) $category = '';
 $dateFrom = $_GET['date_from']     ?? '';
 $dateTo   = $_GET['date_to']       ?? '';
 $page     = max(1, (int)($_GET['page'] ?? 1));
@@ -34,6 +37,14 @@ if ($status)       { $where[] = 'p.status = :st'; $params[':st'] = $status; }
 if ($dateFrom)     { $where[] = 'p.payment_date >= :df'; $params[':df'] = $dateFrom; }
 if ($dateTo)       { $where[] = 'p.payment_date <= :dt'; $params[':dt'] = $dateTo; }
 
+$summaryWhereSQL = implode(' AND ', $where);
+$summaryStmt = $db->prepare("SELECT p.transaction_type, COUNT(*) AS payment_count, COALESCE(SUM(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0) AS paid_total
+    FROM payments p LEFT JOIN members m ON p.member_id = m.id WHERE {$summaryWhereSQL} GROUP BY p.transaction_type");
+$summaryStmt->execute($params);
+$categoryTotals = [];
+foreach ($summaryStmt->fetchAll() as $row) $categoryTotals[$row['transaction_type']] = $row;
+if ($category !== '') { $where[] = 'p.transaction_type = :category'; $params[':category'] = $category; }
+
 $whereSQL = implode(' AND ', $where);
 
 $cntStmt = $db->prepare("SELECT COUNT(*) FROM payments p LEFT JOIN members m ON p.member_id=m.id WHERE {$whereSQL}");
@@ -42,7 +53,7 @@ $totalItems = (int)$cntStmt->fetchColumn();
 $pagination = getPaginationData($totalItems, $page);
 
 // Total filtered amount
-$sumStmt = $db->prepare("SELECT COALESCE(SUM(p.amount),0) FROM payments p LEFT JOIN members m ON p.member_id=m.id WHERE {$whereSQL}");
+$sumStmt = $db->prepare("SELECT COALESCE(SUM(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END),0) FROM payments p LEFT JOIN members m ON p.member_id=m.id WHERE {$whereSQL}");
 $sumStmt->execute($params);
 $totalAmount = (float)$sumStmt->fetchColumn();
 
@@ -73,17 +84,37 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <div class="page-header">
     <div class="page-header-left">
-        <h1>Payments</h1>
-        <p><?= number_format($totalItems) ?> records &bull; Total: <?= formatPhilippineCurrency($totalAmount) ?></p>
+        <h1><?= sanitize($category ? $categories[$category] . ' Payments' : 'All Payments') ?></h1>
+        <p><?= number_format($totalItems) ?> records &bull; Paid total: <?= formatPhilippineCurrency($totalAmount) ?></p>
     </div>
     <div class="page-header-actions">
         <a href="<?= BASE_URL ?>/pages/payments/record.php" class="btn btn-primary"><i data-lucide="plus"></i> Record Payment</a>
         <a href="<?= BASE_URL ?>/pages/attendance/walk-ins.php" class="btn btn-secondary"><i data-lucide="user-round"></i> Walk-in Visits</a>
-        <a href="<?= BASE_URL ?>/pages/payments/history.php" class="btn btn-secondary"><i data-lucide="history"></i> Full History</a>
+        <a href="<?= BASE_URL ?>/pages/payments/history.php?category=<?= urlencode($category) ?>" class="btn btn-secondary"><i data-lucide="history"></i> Full History</a>
     </div>
 </div>
 
+<div class="payment-category-grid" aria-label="Payment categories">
+    <?php
+        $allCategoryQuery = http_build_query(['search' => $search, 'method' => $method, 'status' => $status, 'date_from' => $dateFrom, 'date_to' => $dateTo]);
+        $allCategoryCount = array_sum(array_column($categoryTotals, 'payment_count'));
+        $allCategoryPaid = array_sum(array_column($categoryTotals, 'paid_total'));
+    ?>
+    <a class="card payment-category-card <?= $category === '' ? 'is-selected' : '' ?>" href="?<?= sanitize($allCategoryQuery) ?>">
+        <strong>All Payments</strong><span><?= number_format($allCategoryCount) ?> records</span><b><?= formatPhilippineCurrency($allCategoryPaid) ?> paid</b>
+    </a>
+    <?php foreach ($categories as $type => $label): ?>
+    <?php $categoryQuery = http_build_query(['category' => $type, 'search' => $search, 'method' => $method, 'status' => $status, 'date_from' => $dateFrom, 'date_to' => $dateTo]); ?>
+    <a class="card payment-category-card <?= $category === $type ? 'is-selected' : '' ?>" href="?<?= sanitize($categoryQuery) ?>">
+        <strong><?= sanitize($label) ?></strong>
+        <span><?= number_format((int)($categoryTotals[$type]['payment_count'] ?? 0)) ?> records</span>
+        <b><?= formatPhilippineCurrency((float)($categoryTotals[$type]['paid_total'] ?? 0)) ?> paid</b>
+    </a>
+    <?php endforeach; ?>
+</div>
+
 <form method="GET" class="filter-bar payments-filter-bar">
+    <input type="hidden" name="category" value="<?= sanitize($category) ?>">
     <input type="search" name="search" placeholder="Search member, visitor, txn..." value="<?= sanitize($search) ?>">
     <select name="method">
         <option value="">All Methods</option>
@@ -139,13 +170,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
     <!-- Summary row -->
     <div style="padding:12px 16px; border-top:1px solid var(--border); text-align:right; font-size:14px;">
-        <strong>Filtered Total: <?= formatPhilippineCurrency($totalAmount) ?></strong>
+        <strong><?= $category ? sanitize($categories[$category]) . ' ' : '' ?>Paid Total: <?= formatPhilippineCurrency($totalAmount) ?></strong>
     </div>
 
     <?php if ($pagination['total_pages'] > 1): ?>
     <div class="pagination mt-2">
         <?php for ($i = max(1,$pagination['current_page']-2); $i <= min($pagination['total_pages'],$pagination['current_page']+2); $i++): ?>
-        <a href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&method=<?= urlencode($method) ?>&status=<?= urlencode($status) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>"
+        <a href="?page=<?= $i ?>&category=<?= urlencode($category) ?>&search=<?= urlencode($search) ?>&method=<?= urlencode($method) ?>&status=<?= urlencode($status) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>"
            class="page-link <?= $i===$pagination['current_page']?'active':'' ?>"><?= $i ?></a>
         <?php endfor; ?>
     </div>
