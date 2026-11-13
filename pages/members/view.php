@@ -227,11 +227,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <td><span class="badge badge-<?= $ms['status'] === 'active' ? 'success' : ($ms['status'] === 'expired' ? 'danger' : 'muted') ?>"><?= $ms['status'] === 'inactive' ? 'Canceled' : sanitize($ms['status']) ?></span></td>
                     <td>
                         <?php if ($ms['status'] === 'active'): ?>
-                        <form method="POST" style="display:inline;" onsubmit="return confirm('Cancel this membership plan? The membership will become inactive immediately.')">
-                            <?= csrfField() ?>
-                            <input type="hidden" name="cancel_membership" value="<?= (int) $ms['id'] ?>">
-                            <button type="submit" class="btn btn-danger btn-sm">Cancel Plan</button>
-                        </form>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('cancelMembershipId').value=<?= (int)$ms['id'] ?>; openModal('cancelMembershipModal')">Cancel Plan</button>
                         <?php else: ?>—<?php endif; ?>
                     </td>
                 </tr>
@@ -387,4 +383,15 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closePhotoFu
 </div>
 <?php endif; ?>
 
+<div id="cancelMembershipModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cancelMembershipTitle">
+    <div class="modal">
+        <div class="modal-header"><h3 id="cancelMembershipTitle" class="modal-title">Cancel membership?</h3><button type="button" class="modal-close" onclick="closeModal('cancelMembershipModal')" aria-label="Close">&times;</button></div>
+        <p>This ends the membership immediately. Continue only if this is intended.</p>
+        <form method="POST">
+            <?= csrfField() ?>
+            <input type="hidden" name="cancel_membership" id="cancelMembershipId">
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('cancelMembershipModal')">Keep Membership</button><button type="submit" class="btn btn-danger">Yes, Cancel Membership</button></div>
+        </form>
+    </div>
+</div>
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

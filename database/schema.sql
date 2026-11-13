@@ -1,13 +1,10 @@
--- 707 GYM Database Schema
--- Centralized Gym Record-Keeping and Management System
-drop database if exists `gym_707`;
 CREATE DATABASE IF NOT EXISTS `gym_707` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `gym_707`;
 
--- Safe to re-run: existing tables and administrator records are preserved.
 SET FOREIGN_KEY_CHECKS = 0;
-
+-- ===========================
 -- 1. Admins Table
+-- ===========================
 CREATE TABLE IF NOT EXISTS `admins` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `username` VARCHAR(50) NOT NULL UNIQUE,
@@ -16,10 +13,9 @@ CREATE TABLE IF NOT EXISTS `admins` (
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT IGNORE INTO `admins` (`id`, `username`, `password`)
-VALUES (1, 'admin', '$2y$10$AkIiih8j2ZTfcVXQDpjEY.QjiDt8InDdLjb1EXbOXbQZRWQ2o347W');
-
+-- ===========================
 -- 2. Membership Plans Table
+-- ===========================
 CREATE TABLE IF NOT EXISTS `membership_plans` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(100) NOT NULL,
@@ -29,8 +25,9 @@ CREATE TABLE IF NOT EXISTS `membership_plans` (
     `status` ENUM('active', 'inactive') DEFAULT 'active',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- ===========================
 -- 3. Members Table
+-- ===========================
 CREATE TABLE IF NOT EXISTS `members` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `first_name` VARCHAR(50) NOT NULL,
@@ -43,8 +40,9 @@ CREATE TABLE IF NOT EXISTS `members` (
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- ===========================
 -- 4. Memberships Table
+-- ===========================
 CREATE TABLE IF NOT EXISTS `memberships` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `member_id` INT NOT NULL,
@@ -58,8 +56,9 @@ CREATE TABLE IF NOT EXISTS `memberships` (
     CONSTRAINT `fk_memberships_member` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_memberships_plan` FOREIGN KEY (`plan_id`) REFERENCES `membership_plans` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- ===========================
 -- 5. Attendance Table
+-- ===========================
 CREATE TABLE IF NOT EXISTS `attendance` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `member_id` INT NOT NULL,
@@ -71,8 +70,9 @@ CREATE TABLE IF NOT EXISTS `attendance` (
     KEY `idx_attendance_date` (`date`),
     CONSTRAINT `fk_attendance_member` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- ===========================
 -- 6. Payments Table
+-- ===========================
 CREATE TABLE IF NOT EXISTS `payments` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `transaction_id` VARCHAR(50) NOT NULL UNIQUE,
@@ -95,8 +95,9 @@ CREATE TABLE IF NOT EXISTS `payments` (
     CONSTRAINT `fk_payments_membership` FOREIGN KEY (`membership_id`) REFERENCES `memberships` (`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_payments_admin` FOREIGN KEY (`recorded_by`) REFERENCES `admins` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- ===========================
 -- 7. CSV Import Logs Table
+-- ===========================
 CREATE TABLE IF NOT EXISTS `import_logs` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `import_type` VARCHAR(50) NOT NULL,
@@ -111,16 +112,17 @@ CREATE TABLE IF NOT EXISTS `import_logs` (
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT `fk_import_admin` FOREIGN KEY (`imported_by`) REFERENCES `admins` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- ===========================
 -- 8. Database Backup Settings
+-- ===========================
 CREATE TABLE IF NOT EXISTS `backup_settings` (
     `id` TINYINT UNSIGNED NOT NULL PRIMARY KEY,
     `daily_enabled` TINYINT(1) NOT NULL DEFAULT 0,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-INSERT IGNORE INTO `backup_settings` (`id`, `daily_enabled`) VALUES (1, 0);
-
+-- ===========================
 -- 9. Activity Logs / Audit Trail Table
+-- ===========================
 CREATE TABLE IF NOT EXISTS `activity_logs` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `admin_id` INT DEFAULT NULL,

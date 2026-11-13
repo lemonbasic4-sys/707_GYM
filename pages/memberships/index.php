@@ -7,10 +7,27 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/session.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/csrf.php';
 
 requireAuth();
 
 $db = Database::getConnection();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_membership'])) {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        setFlash('error', 'Security token mismatch. Please try again.');
+    } else {
+        $cancel = $db->prepare("UPDATE memberships SET status = 'inactive', updated_at = NOW() WHERE id = :id AND status = 'active'");
+        $cancel->execute([':id' => (int)$_POST['cancel_membership']]);
+        if ($cancel->rowCount() === 1) {
+            logActivity($_SESSION['admin_id'], 'membership.cancel', 'Cancelled membership ' . (int)$_POST['cancel_membership']);
+            setFlash('success', 'Membership cancelled. The member can now renew.');
+        } else {
+            setFlash('error', 'Active membership not found.');
+        }
+    }
+    redirect(BASE_URL . '/pages/memberships/index.php');
+}
 
 $search   = trim($_GET['search']  ?? '');
 $status   = $_GET['status']       ?? '';
@@ -126,7 +143,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <?php else: ?>—<?php endif; ?>
                     </td>
                     <td>
+                        <?php if ($ms['status'] === 'active' && $ms['start_date'] <= date('Y-m-d') && $ms['end_date'] >= date('Y-m-d')): ?>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('cancelMembershipId').value=<?= (int)$ms['id'] ?>; openModal('cancelMembershipModal')">Cancel Membership</button>
+                        <?php else: ?>
                         <a href="<?= BASE_URL ?>/pages/memberships/renew.php?member_id=<?= (int)$ms['member_record_id'] ?>" class="btn btn-primary btn-sm">Renew</a>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -143,6 +164,18 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     </div>
     <?php endif; ?>
     <?php endif; ?>
+</div>
+
+<div id="cancelMembershipModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cancelMembershipTitle">
+    <div class="modal">
+        <div class="modal-header"><h3 id="cancelMembershipTitle" class="modal-title">Cancel membership?</h3><button type="button" class="modal-close" onclick="closeModal('cancelMembershipModal')" aria-label="Close">&times;</button></div>
+        <p>This ends the membership immediately. The member can renew after cancellation.</p>
+        <form method="POST">
+            <?= csrfField() ?>
+            <input type="hidden" name="cancel_membership" id="cancelMembershipId">
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('cancelMembershipModal')">Keep Membership</button><button type="submit" class="btn btn-danger">Yes, Cancel Membership</button></div>
+        </form>
+    </div>
 </div>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

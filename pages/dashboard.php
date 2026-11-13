@@ -22,6 +22,29 @@ $todayWalkIns = (int) $db->query(
        AND (payment_date = CURDATE() OR DATE(visitor_check_in) = CURDATE())"
 )->fetchColumn();
 
+$topMembers = $db->query(
+    "SELECT m.id, m.first_name, m.last_name, COUNT(a.id) AS visit_count
+     FROM attendance a JOIN members m ON m.id = a.member_id
+     GROUP BY m.id, m.first_name, m.last_name
+     ORDER BY visit_count DESC, m.first_name, m.last_name
+     LIMIT 5"
+)->fetchAll();
+
+$insideNow = $db->query(
+    "SELECT CONCAT(m.first_name, ' ', m.last_name) AS person_name,
+            'Member' AS person_type, a.check_in AS arrived_at
+     FROM attendance a JOIN members m ON m.id = a.member_id
+     WHERE a.date = CURDATE() AND a.check_out IS NULL
+     UNION ALL
+     SELECT p.visitor_name AS person_name, 'Walk-in' AS person_type,
+            p.visitor_check_in AS arrived_at
+     FROM payments p
+     WHERE p.transaction_type = 'walk_in_pass' AND p.status = 'paid'
+       AND p.visitor_name IS NOT NULL AND p.visitor_check_in IS NOT NULL
+       AND DATE(p.visitor_check_in) = CURDATE() AND p.visitor_check_out IS NULL
+     ORDER BY arrived_at DESC"
+)->fetchAll();
+
 // ── Upcoming Expirations (next 7 days) ───────────────────────────────────────
 $upcomingStmt = $db->query(
     "SELECT m.id AS member_record_id, m.first_name, m.last_name,
@@ -118,6 +141,29 @@ require_once __DIR__ . '/../includes/sidebar.php';
     </nav>
 </section>
 
+<div class="dashboard-presence-grid">
+    <section class="card" aria-labelledby="insideNowTitle">
+        <div class="card-header"><span id="insideNowTitle" class="card-title">Inside the Gym Now (<?= count($insideNow) ?>)</span><a href="<?= BASE_URL ?>/pages/attendance/index.php" class="btn btn-ghost btn-sm">Attendance</a></div>
+        <?php if (!$insideNow): ?>
+            <p class="text-muted">No one is currently checked in today.</p>
+        <?php else: ?>
+            <div class="table-wrapper"><table><thead><tr><th>Name</th><th>Type</th><th>Checked In</th></tr></thead><tbody>
+            <?php foreach ($insideNow as $person): ?><tr><td><?= sanitize($person['person_name']) ?></td><td><?= sanitize($person['person_type']) ?></td><td><?= formatDate($person['arrived_at'], 'g:i A') ?></td></tr><?php endforeach; ?>
+            </tbody></table></div>
+        <?php endif; ?>
+    </section>
+    <section class="card" aria-labelledby="topMembersTitle">
+        <div class="card-header"><span id="topMembersTitle" class="card-title">Top Members by Check-ins</span><a href="<?= BASE_URL ?>/pages/attendance/history.php" class="btn btn-ghost btn-sm">History</a></div>
+        <?php if (!$topMembers): ?>
+            <p class="text-muted">No member check-ins recorded yet.</p>
+        <?php else: ?>
+            <div class="table-wrapper"><table><thead><tr><th>Member</th><th>Visits</th></tr></thead><tbody>
+            <?php foreach ($topMembers as $member): ?><tr><td><a href="<?= BASE_URL ?>/pages/members/view.php?id=<?= (int)$member['id'] ?>"><?= sanitize($member['first_name'] . ' ' . $member['last_name']) ?></a></td><td><?= number_format((int)$member['visit_count']) ?></td></tr><?php endforeach; ?>
+            </tbody></table></div>
+        <?php endif; ?>
+    </section>
+</div>
+
 <!-- Upcoming Expirations -->
 <div class="card mb-3">
     <div class="card-header">
@@ -153,8 +199,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </span>
                     </td>
                     <td>
-                        <a href="<?= BASE_URL ?>/pages/memberships/renew.php?member_id=<?= (int)$exp['member_record_id'] ?>"
-                           class="btn btn-primary btn-sm">Renew</a>
+                        <a href="<?= BASE_URL ?>/pages/members/view.php?id=<?= (int)$exp['member_record_id'] ?>"
+                           class="btn btn-secondary btn-sm">View Member</a>
                     </td>
                 </tr>
                 <?php endforeach; ?>

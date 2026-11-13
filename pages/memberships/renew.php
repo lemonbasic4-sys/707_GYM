@@ -34,6 +34,12 @@ $msStmt = $db->prepare(
 );
 $msStmt->execute([':mid' => $member['id']]);
 $currentMs = $msStmt->fetch();
+$activeStmt = $db->prepare("SELECT id FROM memberships WHERE member_id = :mid AND status = 'active' AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1");
+$activeStmt->execute([':mid' => $memberId]);
+if ($activeStmt->fetchColumn()) {
+    setFlash('error', 'Cancel the active membership before renewing.');
+    redirect(BASE_URL . '/pages/memberships/index.php');
+}
 
 $plans    = $db->query("SELECT * FROM membership_plans WHERE status='active' ORDER BY name")->fetchAll();
 
@@ -63,6 +69,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             try {
                 $db->beginTransaction();
+
+                $lockMember = $db->prepare('SELECT id FROM members WHERE id = :id FOR UPDATE');
+                $lockMember->execute([':id' => $memberId]);
+                $checkActive = $db->prepare("SELECT id FROM memberships WHERE member_id = :mid AND status = 'active' AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1");
+                $checkActive->execute([':mid' => $memberId]);
+                if ($checkActive->fetchColumn()) {
+                    throw new RuntimeException('Cancel the active membership before renewing.');
+                }
 
                 // Expire the old membership
                 if ($currentMs && $currentMs['status'] === 'active') {

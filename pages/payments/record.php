@@ -138,16 +138,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $membershipId = null;
 
                 if ($form['transaction_type'] === 'membership_renewal' && $plan) {
+                    $lockMember = $db->prepare('SELECT id FROM members WHERE id = :id FOR UPDATE');
+                    $lockMember->execute([':id' => $form['member_id']]);
                     $activeStmt = $db->prepare(
                         "SELECT id FROM memberships
                          WHERE member_id = :member_id AND status = 'active'
+                         AND start_date <= CURDATE() AND end_date >= CURDATE()
                          ORDER BY end_date DESC LIMIT 1"
                     );
                     $activeStmt->execute([':member_id' => $form['member_id']]);
                     $activeMembershipId = $activeStmt->fetchColumn();
                     if ($activeMembershipId) {
-                        $db->prepare("UPDATE memberships SET status = 'expired', updated_at = NOW() WHERE id = :id")
-                            ->execute([':id' => $activeMembershipId]);
+                        throw new RuntimeException('Cancel the active membership before renewing.');
                     }
 
                     $endDate = date('Y-m-d', strtotime($form['start_date'] . ' +' . (int)$plan['duration_days'] . ' days'));
@@ -207,7 +209,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
-                $errors[] = 'Payment could not be processed. Please try again.';
+                $errors[] = $e->getMessage() === 'Cancel the active membership before renewing.'
+                    ? $e->getMessage() : 'Payment could not be processed. Please try again.';
                 error_log('Payment processing failed: ' . $e->getMessage());
             }
         }
