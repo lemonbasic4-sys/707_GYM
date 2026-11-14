@@ -60,6 +60,7 @@ function createDatabaseBackup(PDO $pdo, string $type = 'manual', bool $skipIfExi
             . '-- Generated: ' . $now->format('Y-m-d H:i:s e (P)') . "\n"
             . '-- Type: ' . $type . "\n"
             . '-- Server: ' . str_replace(["\r", "\n"], ' ', $serverVersion) . "\n\n"
+            . 'CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '``', DB_NAME) . '` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' . "\n"
             . 'USE `' . str_replace('`', '``', DB_NAME) . "`;\n"
             . "SET FOREIGN_KEY_CHECKS=0;\n\n";
         writeBackupChunk($handle, $header);
@@ -176,6 +177,12 @@ function importDatabaseSql(PDO $pdo, string $sql): int
             }
             if (preg_match('/^USE\s+`((?:``|[^`])+)`$/i', $normalized, $useMatch)) {
                 if (str_replace('``', '`', $useMatch[1]) !== DB_NAME) {
+                    throw new RuntimeException('The SQL import references a different database and cannot be applied.');
+                }
+                continue;
+            }
+            if (preg_match('/^CREATE\s+DATABASE\s+IF\s+NOT\s+EXISTS\s+`((?:``|[^`])+)`\s+DEFAULT\s+CHARACTER\s+SET\s+utf8mb4\s+COLLATE\s+utf8mb4_unicode_ci$/i', $normalized, $createMatch)) {
+                if (str_replace('``', '`', $createMatch[1]) !== DB_NAME) {
                     throw new RuntimeException('The SQL import references a different database and cannot be applied.');
                 }
                 continue;
