@@ -29,19 +29,19 @@ $msStmt = $db->prepare(
     "SELECT ms.*, p.name AS plan_name, p.price, p.duration_days
      FROM memberships ms
      JOIN membership_plans p ON ms.plan_id = p.id
-     WHERE ms.member_id = :mid
+     WHERE ms.member_id = :mid AND ms.plan_id <> 3
      ORDER BY ms.created_at DESC LIMIT 1"
 );
 $msStmt->execute([':mid' => $member['id']]);
 $currentMs = $msStmt->fetch();
-$activeStmt = $db->prepare("SELECT id FROM memberships WHERE member_id = :mid AND status = 'active' AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1");
+$activeStmt = $db->prepare("SELECT id FROM memberships WHERE member_id = :mid AND plan_id <> 3 AND status = 'active' AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1");
 $activeStmt->execute([':mid' => $memberId]);
 if ($activeStmt->fetchColumn()) {
     setFlash('error', 'Cancel the active membership before renewing.');
     redirect(BASE_URL . '/pages/memberships/index.php');
 }
 
-$plans    = $db->query("SELECT * FROM membership_plans WHERE status='active' ORDER BY name")->fetchAll();
+$plans    = $db->query("SELECT * FROM membership_plans WHERE status='active' AND id <> 3 ORDER BY name")->fetchAll();
 
 // Default start: day after expiry (or today)
 $defaultStart = $currentMs && $currentMs['end_date'] >= date('Y-m-d')
@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$startDate) || !checkdate((int)substr($startDate, 5, 2), (int)substr($startDate, 8, 2), (int)substr($startDate, 0, 4))) $errors[] = 'Invalid start date.';
 
         if (empty($errors)) {
-            $planStmt = $db->prepare("SELECT * FROM membership_plans WHERE id=:id AND status='active'");
+            $planStmt = $db->prepare("SELECT * FROM membership_plans WHERE id=:id AND status='active' AND id <> 3");
             $planStmt->execute([':id' => $planId]);
             $planInfo = $planStmt->fetch();
 
@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $lockMember = $db->prepare('SELECT id FROM members WHERE id = :id FOR UPDATE');
                 $lockMember->execute([':id' => $memberId]);
-                $checkActive = $db->prepare("SELECT id FROM memberships WHERE member_id = :mid AND status = 'active' AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1");
+                $checkActive = $db->prepare("SELECT id FROM memberships WHERE member_id = :mid AND plan_id <> 3 AND status = 'active' AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1");
                 $checkActive->execute([':mid' => $memberId]);
                 if ($checkActive->fetchColumn()) {
                     throw new RuntimeException('Cancel the active membership before renewing.');

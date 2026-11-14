@@ -29,15 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect($attendanceUrl);
         }
 
-        if (($_POST['payment_confirmed'] ?? '') !== 'yes') {
-            setFlash('warning', 'Collect the visit fee before checking in this member.');
-            redirect($attendanceUrl);
-        }
         $paymentMethod = $_POST['payment_method'] ?? '';
-        if (!in_array($paymentMethod, ['cash', 'gcash', 'bank_transfer', 'card'], true)) {
-            setFlash('error', 'Select a valid payment method.');
-            redirect($attendanceUrl);
-        }
 
         $member = $db->prepare("SELECT first_name, last_name FROM members WHERE id = :id AND status = 'active'");
         $member->execute([':id' => $memberId]);
@@ -56,53 +48,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Member is no longer active.');
             }
             $activePlan = $db->prepare(
-                "SELECT id FROM memberships WHERE member_id = :id AND status = 'active'
+                "SELECT id FROM memberships WHERE member_id = :id AND status = 'active' AND plan_id <> 3
                  AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1"
             );
             $activePlan->execute([':id' => $memberId]);
             $membershipId = $activePlan->fetchColumn() ?: null;
-            $visitFee = $membershipId ? 70 : 100;
+            $subscription = $db->prepare(
+                "SELECT id FROM memberships WHERE member_id = :id AND plan_id = 3 AND status = 'active'
+                 AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1"
+            );
+            $subscription->execute([':id' => $memberId]);
+            $hasSubscription = $membershipId && $subscription->fetchColumn();
+            $visitFee = $hasSubscription ? 0 : ($membershipId ? 70 : 100);
+            if ($visitFee > 0 && ($_POST['payment_confirmed'] ?? '') !== 'yes') {
+                throw new RuntimeException('Collect the visit fee before checking in this member.');
+            }
+            if ($visitFee > 0 && !in_array($paymentMethod, ['cash', 'gcash', 'bank_transfer', 'card'], true)) {
+                throw new RuntimeException('Select a valid payment method.');
+            }
             $tenderedInput = trim((string)($_POST['amount_tendered'] ?? ''));
-            if (!preg_match('/^\d+(?:\.\d{1,2})?$/', $tenderedInput) || (float)$tenderedInput < $visitFee) {
+            if ($visitFee > 0 && (!preg_match('/^\d+(?:\.\d{1,2})?$/', $tenderedInput) || (float)$tenderedInput < $visitFee)) {
                 $db->rollBack();
                 setFlash('error', 'Amount tendered must cover the ' . formatPhilippineCurrency($visitFee) . ' visit fee.');
                 redirect($attendanceUrl);
             }
-            $amountTendered = round((float)$tenderedInput, 2);
+            $amountTendered = $visitFee > 0 ? round((float)$tenderedInput, 2) : 0;
             $change = round($amountTendered - $visitFee, 2);
             $checkin = $db->prepare(
                 "INSERT INTO attendance (member_id, check_in, date)
                  VALUES (:member_id, NOW(), CURDATE())"
             );
             $checkin->execute([':member_id' => $memberId]);
-            $payment = $db->prepare(
-                "INSERT INTO payments (transaction_id, transaction_type, member_id, membership_id, amount, payment_method,
-                 recorded_by, payment_date, status, notes, created_at)
-                 VALUES (:txn, 'member_visit', :member_id, :membership_id, :amount, :method, :admin_id,
-                 CURDATE(), 'paid', :notes, NOW())"
-            );
-            $payment->execute([
-                ':txn' => 'TXN-' . strtoupper(bin2hex(random_bytes(6))),
-                ':member_id' => $memberId,
-                ':membership_id' => $membershipId,
-                ':amount' => $visitFee,
-                ':method' => $paymentMethod,
-                ':admin_id' => $_SESSION['admin_id'],
-                ':notes' => 'Daily gym visit; attendance ID ' . $db->lastInsertId()
-                    . '; tendered ' . number_format($amountTendered, 2, '.', '')
-                    . '; change ' . number_format($change, 2, '.', ''),
-            ]);
+            if ($visitFee > 0) {
+                $payment = $db->prepare(
+                    "INSERT INTO payments (transaction_id, transaction_type, member_id, membership_id, amount, payment_method,
+                     recorded_by, payment_date, status, notes, created_at)
+                     VALUES (:txn, 'member_visit', :member_id, :membership_id, :amount, :method, :admin_id,
+                     CURDATE(), 'paid', :notes, NOW())"
+                );
+                $payment->execute([
+                    ':txn' => 'TXN-' . strtoupper(bin2hex(random_bytes(6))),
+                    ':member_id' => $memberId,
+                    ':membership_id' => $membershipId,
+                    ':amount' => $visitFee,
+                    ':method' => $paymentMethod,
+                    ':admin_id' => $_SESSION['admin_id'],
+                    ':notes' => 'Daily gym visit; attendance ID ' . $db->lastInsertId()
+                        . '; tendered ' . number_format($amountTendered, 2, '.', '')
+                        . '; change ' . number_format($change, 2, '.', ''),
+                ]);
+            }
             $db->commit();
             logActivity(
                 $_SESSION['admin_id'],
                 'attendance.checkin',
                 "Checked in {$member['first_name']} {$member['last_name']} (member {$memberId})"
             );
-            setFlash('success', 'Payment of ' . formatPhilippineCurrency($visitFee) . ' and check-in recorded for ' . $member['first_name'] . ' ' . $member['last_name'] . '. Change: ' . formatPhilippineCurrency($change) . '.');
+            setFlash('success', $hasSubscription
+                ? 'Check-in recorded for ' . $member['first_name'] . ' ' . $member['last_name'] . '. Active subscription: no daily fee.'
+                : 'Payment of ' . formatPhilippineCurrency($visitFee) . ' and check-in recorded for ' . $member['first_name'] . ' ' . $member['last_name'] . '. Change: ' . formatPhilippineCurrency($change) . '.');
         } catch (Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();
-            if (!$e instanceof PDOException) throw $e;
-            if ($e->getCode() === '23000') {
+            if ($e instanceof RuntimeException) {
+                setFlash('error', $e->getMessage());
+            } elseif (!$e instanceof PDOException) {
+                throw $e;
+            } elseif ($e->getCode() === '23000') {
                 setFlash('warning', 'This member already has an attendance record today.');
             } else {
                 throw $e;
@@ -137,8 +148,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $availableMembers = $db->query(
     "SELECT m.id, m.first_name, m.last_name, m.phone,
             CASE WHEN EXISTS (SELECT 1 FROM memberships ms WHERE ms.member_id = m.id
-                AND ms.status = 'active' AND ms.start_date <= CURDATE() AND ms.end_date >= CURDATE())
-                 THEN 70 ELSE 100 END AS visit_fee
+                AND ms.plan_id <> 3 AND ms.status = 'active' AND ms.start_date <= CURDATE() AND ms.end_date >= CURDATE())
+                 THEN CASE WHEN EXISTS (SELECT 1 FROM memberships sub WHERE sub.member_id = m.id
+                     AND sub.plan_id = 3 AND sub.status = 'active' AND sub.start_date <= CURDATE() AND sub.end_date >= CURDATE())
+                     THEN 0 ELSE 70 END ELSE 100 END AS visit_fee
      FROM members m
      WHERE m.status = 'active'
        AND NOT EXISTS (
@@ -229,9 +242,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <input type="hidden" name="checkin_member_id" id="confirmedMemberId">
             <input type="hidden" name="payment_confirmed" value="yes">
             <div class="form-group"><label for="visitPaymentMethod">Payment method</label><select id="visitPaymentMethod" name="payment_method" required><option value="cash">Cash</option><option value="gcash">GCash</option><option value="bank_transfer">Bank Transfer</option><option value="card">Card</option></select></div>
-            <div class="form-group"><label for="visitAmountTendered">Amount Tendered (PHP)</label><input type="number" id="visitAmountTendered" name="amount_tendered" min="0" step="0.01" required></div>
+            <div class="form-group" id="visitTenderedField"><label for="visitAmountTendered">Amount Tendered (PHP)</label><input type="number" id="visitAmountTendered" name="amount_tendered" min="0" step="0.01" required></div>
             <p aria-live="polite">Visit fee: <strong id="visitFeeDisplay"></strong> &nbsp; Change: <strong id="visitChangeDisplay">₱0.00</strong></p>
-            <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('checkinPaymentModal')">Not Paid Yet</button><button type="submit" class="btn btn-primary">Paid, Check In</button></div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('checkinPaymentModal')">Cancel</button><button type="submit" class="btn btn-primary" id="confirmCheckinButton">Paid, Check In</button></div>
         </form>
     </div>
 </div>
@@ -253,8 +266,15 @@ function showCheckinPayment() {
     currentVisitFee = Number(option.dataset.fee);
     document.getElementById('visitFeeDisplay').textContent = '₱' + currentVisitFee.toFixed(2);
     visitTendered.value = '';
+    document.getElementById('visitTenderedField').hidden = currentVisitFee === 0;
+    visitTendered.required = currentVisitFee > 0;
+    document.getElementById('visitPaymentMethod').closest('.form-group').hidden = currentVisitFee === 0;
+    document.getElementById('checkinPaymentTitle').textContent = currentVisitFee === 0 ? 'Confirm subscription check-in' : "Confirm today's visit payment";
+    document.getElementById('confirmCheckinButton').textContent = currentVisitFee === 0 ? 'Check In' : 'Paid, Check In';
     updateVisitChange();
-    document.getElementById('checkinPaymentMessage').textContent = option.textContent.trim() + ': has the ₱' + option.dataset.fee + ' visit fee been paid today?';
+    document.getElementById('checkinPaymentMessage').textContent = currentVisitFee === 0
+        ? option.textContent.trim() + ': active subscription, no daily fee.'
+        : option.textContent.trim() + ': has the ₱' + option.dataset.fee + ' visit fee been paid today?';
     openModal('checkinPaymentModal');
 }
 </script>

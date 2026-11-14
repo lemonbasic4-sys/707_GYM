@@ -41,7 +41,7 @@ $memberships->execute([':mid' => $id]);
 $memberships = $memberships->fetchAll();
 $hasActiveMembership = false;
 foreach ($memberships as $membership) {
-    if ($membership['status'] === 'active' && $membership['start_date'] <= date('Y-m-d') && $membership['end_date'] >= date('Y-m-d')) {
+    if ((int)$membership['plan_id'] !== 3 && $membership['status'] === 'active' && $membership['start_date'] <= date('Y-m-d') && $membership['end_date'] >= date('Y-m-d')) {
         $hasActiveMembership = true;
         break;
     }
@@ -216,6 +216,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 <!-- Memberships Tab -->
 <div id="tabMemberships" class="tab-panel active">
     <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+        <?php if ($hasActiveMembership): ?>
+        <a href="<?= BASE_URL ?>/pages/payments/record.php?type=membership_renewal&amp;member_id=<?= $id ?>&amp;plan_id=3" class="btn btn-secondary btn-sm">
+            <i data-lucide="calendar-plus"></i> Add 1 Month Subscription
+        </a>
+        <?php endif; ?>
         <a href="<?= BASE_URL ?>/pages/payments/record.php?type=membership_renewal&amp;member_id=<?= $id ?>" class="btn btn-primary btn-sm">
             <i data-lucide="plus"></i> Record Membership Payment
         </a>

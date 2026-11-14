@@ -33,7 +33,7 @@ $form = [
     'transaction_type' => $requestedType,
     'member_id' => (int)($_POST['member_id'] ?? $_GET['member_id'] ?? 0),
     'visitor_name' => trim((string)($_POST['visitor_name'] ?? '')),
-    'plan_id' => (int)($_POST['plan_id'] ?? 0),
+    'plan_id' => (int)($_POST['plan_id'] ?? $_GET['plan_id'] ?? 0),
     'amount' => $_POST['amount'] ?? ($requestedType === 'walk_in_pass' ? '100' : ''),
     'discount' => $_POST['discount'] ?? '0',
     'payment_method' => $_POST['payment_method'] ?? 'cash',
@@ -140,19 +140,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($form['transaction_type'] === 'membership_renewal' && $plan) {
                     $lockMember = $db->prepare('SELECT id FROM members WHERE id = :id FOR UPDATE');
                     $lockMember->execute([':id' => $form['member_id']]);
+                    $isSubscription = (int)$plan['id'] === 3;
                     $activeStmt = $db->prepare(
-                        "SELECT id FROM memberships
-                         WHERE member_id = :member_id AND status = 'active'
+                        "SELECT id, end_date FROM memberships
+                         WHERE member_id = :member_id AND status = 'active' AND plan_id <> 3
                          AND start_date <= CURDATE() AND end_date >= CURDATE()
                          ORDER BY end_date DESC LIMIT 1"
                     );
                     $activeStmt->execute([':member_id' => $form['member_id']]);
-                    $activeMembershipId = $activeStmt->fetchColumn();
-                    if ($activeMembershipId) {
+                    $baseMembership = $activeStmt->fetch();
+                    if ($isSubscription && !$baseMembership) {
+                        throw new RuntimeException('An active 6-month or 1-year membership is required for a subscription.');
+                    }
+                    if (!$isSubscription && $baseMembership) {
                         throw new RuntimeException('Cancel the active membership before renewing.');
                     }
-
-                    $endDate = date('Y-m-d', strtotime($form['start_date'] . ' +' . (int)$plan['duration_days'] . ' days'));
+                    $startDate = $form['start_date'];
+                    if ($isSubscription) {
+                        $latestSubscription = $db->prepare(
+                            "SELECT MAX(end_date) FROM memberships WHERE member_id = :member_id
+                             AND plan_id = 3 AND status = 'active' AND end_date >= CURDATE()"
+                        );
+                        $latestSubscription->execute([':member_id' => $form['member_id']]);
+                        $latestEnd = $latestSubscription->fetchColumn();
+                        if ($latestEnd && $startDate <= $latestEnd) {
+                            $startDate = date('Y-m-d', strtotime($latestEnd . ' +1 day'));
+                        }
+                    }
+                    $endDate = date('Y-m-d', strtotime($startDate . ' +' . ((int)$plan['duration_days'] - ($isSubscription ? 1 : 0)) . ' days'));
+                    if ($isSubscription && $endDate > $baseMembership['end_date']) {
+                        throw new RuntimeException('The subscription would extend beyond the current membership. Renew the membership first.');
+                    }
                     $membershipStmt = $db->prepare(
                         "INSERT INTO memberships (member_id, plan_id, start_date, end_date, status, created_at, updated_at)
                          VALUES (:member_id, :plan_id, :start_date, :end_date, 'active', NOW(), NOW())"
@@ -160,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $membershipStmt->execute([
                         ':member_id' => $form['member_id'],
                         ':plan_id' => $plan['id'],
-                        ':start_date' => $form['start_date'],
+                        ':start_date' => $startDate,
                         ':end_date' => $endDate,
                     ]);
                     $membershipId = (int)$db->lastInsertId();
@@ -209,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
-                $errors[] = $e->getMessage() === 'Cancel the active membership before renewing.'
+                $errors[] = $e instanceof RuntimeException
                     ? $e->getMessage() : 'Payment could not be processed. Please try again.';
                 error_log('Payment processing failed: ' . $e->getMessage());
             }
@@ -305,6 +323,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <?php endforeach; ?>
             </select>
             <span class="form-hint" id="planDurationHint"></span>
+            <span class="form-hint">1 Month Subscription requires an active 6-month or 1-year membership. An existing subscription extends from its expiry.</span>
         </div>
 
         <div class="payment-field payment-package-price" <?= $form['transaction_type'] === 'membership_renewal' ? 'hidden' : '' ?>>
