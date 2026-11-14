@@ -35,8 +35,12 @@ class Database
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => true, // Enables reuse of named placeholders across queries
-                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
             ];
+
+            $initCommandOption = defined('Pdo\\Mysql::ATTR_INIT_COMMAND')
+                ? constant('Pdo\\Mysql::ATTR_INIT_COMMAND')
+                : PDO::MYSQL_ATTR_INIT_COMMAND;
+            $options[$initCommandOption] = "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci";
 
             try {
                 self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
