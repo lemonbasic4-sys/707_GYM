@@ -120,16 +120,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_action'])) {
             $errors[] = 'Please fill in all password fields.';
         } elseif ($newPass !== $confirmPass) {
             $errors[] = 'New password and confirmation do not match.';
-        } elseif (strlen($newPass) < 6) {
-            $errors[] = 'New password must be at least 6 characters.';
+        } elseif (strlen($newPass) < 8) {
+            $errors[] = 'New password must be at least 8 characters.';
         } else {
-            $res = Auth::changePassword($adminId, $currentPass, $newPass);
-            if ($res['success']) {
+            $res = (new Auth())->changePassword($adminId, $currentPass, $newPass);
+            if ($res === true) {
                 logActivity($adminId, 'Changed Password', 'Admin password changed');
                 setFlash('success', 'Password updated successfully.');
                 redirect(BASE_URL . '/pages/admin/settings.php?tab=password');
             } else {
-                $errors[] = $res['message'];
+                $errors[] = $res;
             }
         }
     }
@@ -215,12 +215,12 @@ include BASE_PATH . '/includes/sidebar.php';
 
             <div class="form-group mb-3">
                 <label class="form-label" for="new_password">New Password</label>
-                <input type="password" class="form-control" id="new_password" name="new_password" minlength="6" required>
+                <input type="password" class="form-control" id="new_password" name="new_password" minlength="8" required>
             </div>
 
             <div class="form-group mb-4">
                 <label class="form-label" for="confirm_password">Confirm New Password</label>
-                <input type="password" class="form-control" id="confirm_password" name="confirm_password" minlength="6" required>
+                <input type="password" class="form-control" id="confirm_password" name="confirm_password" minlength="8" required>
             </div>
 
             <button type="submit" class="btn btn-primary">Update Password</button>
