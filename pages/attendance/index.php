@@ -148,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $availableMembers = $db->query(
-    "SELECT m.id, m.first_name, m.last_name, m.phone,
+    "SELECT m.id, m.first_name, m.last_name, m.phone, m.photo,
             CASE WHEN EXISTS (SELECT 1 FROM memberships ms WHERE ms.member_id = m.id
                 AND ms.plan_id <> 3 AND ms.status = 'active' AND ms.start_date <= CURDATE() AND ms.end_date >= CURDATE())
                  THEN CASE WHEN EXISTS (SELECT 1 FROM memberships sub WHERE sub.member_id = m.id
@@ -179,7 +179,7 @@ $whereSQL = implode(' AND ', $where);
 
 $records = $db->prepare(
     "SELECT a.id, a.check_in, a.check_out,
-            m.first_name, m.last_name
+            m.first_name, m.last_name, m.photo
      FROM attendance a
      JOIN members m ON a.member_id = m.id
      WHERE {$whereSQL}
@@ -223,7 +223,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <select id="checkinMember" name="checkin_member_id" required>
             <option value="">Select a member</option>
             <?php foreach ($availableMembers as $member): ?>
-            <option value="<?= (int)$member['id'] ?>" data-fee="<?= (int)$member['visit_fee'] ?>">
+            <option value="<?= (int)$member['id'] ?>" data-fee="<?= (int)$member['visit_fee'] ?>" data-name="<?= sanitize($member['first_name'] . ' ' . $member['last_name']) ?>" data-phone="<?= sanitize($member['phone'] ?? '') ?>" data-photo="<?= $member['photo'] ? UPLOAD_URL . '/' . sanitize($member['photo']) : '' ?>" data-initials="<?= sanitize(getInitials($member['first_name'] . ' ' . $member['last_name'])) ?>">
                 <?= sanitize($member['first_name'] . ' ' . $member['last_name']) ?><?= $member['phone'] ? ' · ' . sanitize($member['phone']) : '' ?>
             </option>
             <?php endforeach; ?>
@@ -238,16 +238,20 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 </section>
 
 <div id="checkinPaymentModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="checkinPaymentTitle">
-    <div class="modal">
+    <div class="modal attendance-confirm-modal">
         <div class="modal-header"><h3 id="checkinPaymentTitle" class="modal-title">Confirm today's visit payment</h3><button type="button" class="modal-close" onclick="closeModal('checkinPaymentModal')" aria-label="Close">&times;</button></div>
-        <p id="checkinPaymentMessage"></p>
+        <div class="attendance-confirm-member">
+            <div class="attendance-confirm-avatar" id="checkinMemberAvatar" aria-hidden="true"></div>
+            <div><strong id="checkinMemberName"></strong><span id="checkinMemberPhone"></span></div>
+        </div>
+        <div class="attendance-confirm-status" id="checkinPaymentMessage"></div>
         <form method="POST" id="checkinPaymentForm">
             <?= csrfField() ?>
             <input type="hidden" name="checkin_member_id" id="confirmedMemberId">
             <input type="hidden" name="payment_confirmed" value="yes">
             <div class="form-group"><label for="visitPaymentMethod">Payment method</label><select id="visitPaymentMethod" name="payment_method" required><option value="cash">Cash</option><option value="gcash">GCash</option><option value="bank_transfer">Bank Transfer</option><option value="card">Card</option></select></div>
             <div class="form-group" id="visitTenderedField"><label for="visitAmountTendered">Amount Tendered (PHP)</label><input type="number" id="visitAmountTendered" name="amount_tendered" min="0" step="0.01" required></div>
-            <p aria-live="polite">Visit fee: <strong id="visitFeeDisplay"></strong> &nbsp; Change: <strong id="visitChangeDisplay">₱0.00</strong></p>
+            <div class="attendance-confirm-totals" aria-live="polite"><div><span>Visit fee</span><strong id="visitFeeDisplay"></strong></div><div><span>Change</span><strong id="visitChangeDisplay">₱0.00</strong></div></div>
             <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('checkinPaymentModal')">Cancel</button><button type="submit" class="btn btn-primary" id="confirmCheckinButton">Paid, Check In</button></div>
         </form>
     </div>
@@ -266,6 +270,18 @@ function showCheckinPayment() {
     const select = document.getElementById('checkinMember');
     if (!select || !select.value) { select?.reportValidity(); return; }
     const option = select.options[select.selectedIndex];
+    const avatar = document.getElementById('checkinMemberAvatar');
+    avatar.replaceChildren();
+    if (option.dataset.photo) {
+        const photo = document.createElement('img');
+        photo.src = option.dataset.photo;
+        photo.alt = '';
+        avatar.appendChild(photo);
+    } else {
+        avatar.textContent = option.dataset.initials || '?';
+    }
+    document.getElementById('checkinMemberName').textContent = option.dataset.name;
+    document.getElementById('checkinMemberPhone').textContent = option.dataset.phone || 'Gym member';
     document.getElementById('confirmedMemberId').value = select.value;
     currentVisitFee = Number(option.dataset.fee);
     document.getElementById('visitFeeDisplay').textContent = '₱' + currentVisitFee.toFixed(2);
@@ -277,8 +293,8 @@ function showCheckinPayment() {
     document.getElementById('confirmCheckinButton').textContent = currentVisitFee === 0 ? 'Check In' : 'Paid, Check In';
     updateVisitChange();
     document.getElementById('checkinPaymentMessage').textContent = currentVisitFee === 0
-        ? option.textContent.trim() + ': active subscription, no daily fee.'
-        : option.textContent.trim() + ': has the ₱' + option.dataset.fee + ' visit fee been paid today?';
+        ? 'Active 1 Month Subscription — no daily visit fee today.'
+        : 'Collect the visit fee before checking in this member.';
     openModal('checkinPaymentModal');
 }
 </script>
@@ -319,13 +335,9 @@ function showCheckinPayment() {
                     <td><?= $duration ?: '—' ?></td>
                     <td>
                         <?php if (!$rec['check_out']): ?>
-                        <form method="POST" style="display:inline;">
-                            <?= csrfField() ?>
-                            <input type="hidden" name="checkout_id" value="<?= (int)$rec['id'] ?>">
-                            <button type="submit" class="btn btn-secondary btn-sm">
+                            <button type="button" class="btn btn-secondary btn-sm" data-checkout-id="<?= (int)$rec['id'] ?>" data-member-name="<?= sanitize($rec['first_name'] . ' ' . $rec['last_name']) ?>" data-member-photo="<?= $rec['photo'] ? UPLOAD_URL . '/' . sanitize($rec['photo']) : '' ?>" data-member-initials="<?= sanitize(getInitials($rec['first_name'] . ' ' . $rec['last_name'])) ?>" onclick="showCheckoutConfirmation(this)">
                                 <i data-lucide="log-out"></i> Check-out
                             </button>
-                        </form>
                         <?php else: ?>
                         <span class="text-muted" style="font-size:13px;">Done</span>
                         <?php endif; ?>
@@ -337,5 +349,38 @@ function showCheckinPayment() {
     </div>
     <?php endif; ?>
 </div>
+
+<div id="checkoutConfirmModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="checkoutConfirmTitle">
+    <div class="modal attendance-confirm-modal">
+        <div class="modal-header"><h3 id="checkoutConfirmTitle" class="modal-title">Check out member?</h3><button type="button" class="modal-close" onclick="closeModal('checkoutConfirmModal')" aria-label="Close">&times;</button></div>
+        <div class="attendance-confirm-member">
+            <div class="attendance-confirm-avatar" id="checkoutMemberAvatar" aria-hidden="true"></div>
+            <div><strong id="checkoutMemberName"></strong><span>Currently inside the gym</span></div>
+        </div>
+        <div class="attendance-confirm-status">Confirming check-out will end this member's current gym visit. They will be marked as no longer inside the gym.</div>
+        <form method="POST">
+            <?= csrfField() ?>
+            <input type="hidden" name="checkout_id" id="confirmedCheckoutId">
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('checkoutConfirmModal')">Keep Inside</button><button type="submit" class="btn btn-primary">Yes, Check Out</button></div>
+        </form>
+    </div>
+</div>
+<script>
+function showCheckoutConfirmation(button) {
+    document.getElementById('confirmedCheckoutId').value = button.dataset.checkoutId;
+    document.getElementById('checkoutMemberName').textContent = button.dataset.memberName;
+    const avatar = document.getElementById('checkoutMemberAvatar');
+    avatar.replaceChildren();
+    if (button.dataset.memberPhoto) {
+        const photo = document.createElement('img');
+        photo.src = button.dataset.memberPhoto;
+        photo.alt = '';
+        avatar.appendChild(photo);
+    } else {
+        avatar.textContent = button.dataset.memberInitials || '?';
+    }
+    openModal('checkoutConfirmModal');
+}
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

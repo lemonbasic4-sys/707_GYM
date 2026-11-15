@@ -1114,6 +1114,24 @@ textarea { resize: vertical; min-height: 84px; }
 .attendance-checkin-form select { min-width: 0; min-height: 38px; }
 .attendance-checkin-form .btn { min-height: 38px; }
 .attendance-checkin-empty { margin: 0; }
+.member-plan-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 14px; padding: 14px 16px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: var(--surface); }
+.member-plan-summary-label { width: 100%; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.member-plan-summary strong { font-size: 16px; }
+.member-plan-summary-addon { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 6px; background: rgba(34, 197, 94, .12); color: #4ade80; font-size: 12px; font-weight: 600; }
+.member-plan-summary-addon svg { width: 14px; height: 14px; }
+.member-plan-summary small { width: 100%; color: var(--muted); font-size: 12px; }
+.attendance-confirm-modal { max-width: 500px; }
+.attendance-confirm-member { display: flex; align-items: center; gap: 14px; padding: 16px; margin: 8px 0 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.attendance-confirm-avatar { display: grid; flex: 0 0 64px; width: 64px; height: 64px; place-items: center; overflow: hidden; border-radius: 50%; background: var(--accent); color: #fff; font-size: 21px; font-weight: 700; }
+.attendance-confirm-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.attendance-confirm-member strong, .attendance-confirm-member span { display: block; }
+.attendance-confirm-member strong { font-size: 17px; line-height: 1.3; }
+.attendance-confirm-member span { margin-top: 3px; color: var(--muted); font-size: 13px; }
+.attendance-confirm-status { padding: 12px 14px; margin-bottom: 16px; border-radius: var(--radius-sm); background: rgba(255, 77, 0, .1); color: var(--text); font-size: 13px; line-height: 1.5; }
+.attendance-confirm-totals { display: flex; justify-content: space-between; gap: 12px; padding: 14px 0; margin-top: 10px; border-top: 1px solid var(--border); }
+.attendance-confirm-totals div { display: flex; flex-direction: column; gap: 3px; }
+.attendance-confirm-totals span { color: var(--muted); font-size: 12px; }
+.attendance-confirm-totals strong { font-size: 18px; }
 @media (max-width: 760px) {
     .member-form-grid { grid-template-columns: minmax(0, 1fr); }
     .member-wizard-steps { gap: 4px; }

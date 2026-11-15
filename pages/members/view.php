@@ -226,7 +226,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 <!-- Memberships Tab -->
 <div id="tabMemberships" class="tab-panel active">
     <?php if ($hasActiveMembership): ?>
-    <p class="text-muted" style="margin-bottom:12px;"><?= sanitize($activePlanName) ?><?= $hasActiveSubscription && $canAddSubscription ? ' w/ 1 Month Subscription' : '' ?></p>
+    <div class="member-plan-summary">
+        <span class="member-plan-summary-label">Current plan</span>
+        <strong><?= sanitize($activePlanName) ?></strong>
+        <?php if ($hasActiveSubscription && $canAddSubscription): ?>
+        <span class="member-plan-summary-addon"><i data-lucide="check-circle-2" aria-hidden="true"></i> With 1 Month Subscription</span>
+        <small>No daily visit fee while the subscription is active.</small>
+        <?php endif; ?>
+    </div>
     <?php endif; ?>
     <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
         <?php if ($canAddSubscription): ?>
