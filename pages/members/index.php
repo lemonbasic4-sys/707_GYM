@@ -57,6 +57,23 @@ $stmt = $db->prepare(
     "SELECT m.id, m.first_name, m.last_name, m.phone, m.photo,
             m.status, m.created_at,
             ms.status AS membership_status, ms.end_date,
+            (SELECT p.name FROM memberships base_ms
+             JOIN membership_plans p ON p.id = base_ms.plan_id
+             WHERE base_ms.member_id = m.id AND base_ms.plan_id <> 3
+               AND base_ms.status = 'active' AND base_ms.start_date <= CURDATE()
+               AND base_ms.end_date >= CURDATE()
+             ORDER BY base_ms.end_date DESC LIMIT 1) AS active_plan_name,
+            (SELECT base_ms.end_date FROM memberships base_ms
+             WHERE base_ms.member_id = m.id AND base_ms.plan_id <> 3
+               AND base_ms.status = 'active' AND base_ms.start_date <= CURDATE()
+               AND base_ms.end_date >= CURDATE()
+             ORDER BY base_ms.end_date DESC LIMIT 1) AS active_plan_end_date,
+            EXISTS (SELECT 1 FROM memberships sub WHERE sub.member_id = m.id
+                AND sub.plan_id = 3 AND sub.status = 'active'
+                AND sub.start_date <= CURDATE() AND sub.end_date >= CURDATE()
+                AND EXISTS (SELECT 1 FROM memberships eligible WHERE eligible.member_id = m.id
+                    AND eligible.plan_id IN (1, 2) AND eligible.status = 'active'
+                    AND eligible.start_date <= CURDATE() AND eligible.end_date >= CURDATE())) AS has_active_subscription,
             CASE WHEN EXISTS (
                 SELECT 1 FROM memberships current_ms WHERE current_ms.member_id = m.id
                 AND current_ms.status = 'active' AND current_ms.start_date <= CURDATE()
@@ -162,7 +179,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </td>
                     <td><?= sanitize($m['phone'] ?? '—') ?></td>
                     <td>
-                        <?php if ($m['membership_status']): ?>
+                        <?php if ($m['active_plan_name']): ?>
+                        <?= sanitize($m['active_plan_name']) ?><?= $m['has_active_subscription'] ? ' w/ 1 Month Subscription' : '' ?>
+                        <?php elseif ($m['membership_status']): ?>
                         <span class="badge badge-<?= $m['membership_status'] === 'active' ? 'success' : ($m['membership_status'] === 'expired' ? 'danger' : 'muted') ?>">
                             <?= sanitize($m['membership_status']) ?>
                         </span>
@@ -170,7 +189,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <span class="badge badge-muted">None</span>
                         <?php endif; ?>
                     </td>
-                    <td><?= $m['end_date'] ? formatDate($m['end_date']) : '—' ?></td>
+                    <td><?= ($m['active_plan_end_date'] ?: $m['end_date']) ? formatDate($m['active_plan_end_date'] ?: $m['end_date']) : '—' ?></td>
                     <td>
                         <?php $displayStatus = $m['status'] === 'archived' ? 'Archived' : ((int)$m['has_active_membership'] === 1 ? 'Active' : 'Pending'); ?>
                         <span class="badge badge-<?= $displayStatus === 'Active' ? 'success' : 'muted' ?>">

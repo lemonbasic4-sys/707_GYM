@@ -143,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $isSubscription = (int)$plan['id'] === 3;
                     $activeStmt = $db->prepare(
                         "SELECT id, end_date FROM memberships
-                         WHERE member_id = :member_id AND status = 'active' AND plan_id <> 3
+                         WHERE member_id = :member_id AND status = 'active' AND plan_id IN (1, 2)
                          AND start_date <= CURDATE() AND end_date >= CURDATE()
                          ORDER BY end_date DESC LIMIT 1"
                     );

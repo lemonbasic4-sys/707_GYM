@@ -58,7 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1"
             );
             $subscription->execute([':id' => $memberId]);
-            $hasSubscription = $membershipId && $subscription->fetchColumn();
+            $eligiblePlan = $db->prepare("SELECT 1 FROM memberships WHERE member_id = :id AND plan_id IN (1, 2) AND status = 'active' AND start_date <= CURDATE() AND end_date >= CURDATE() LIMIT 1");
+            $eligiblePlan->execute([':id' => $memberId]);
+            $hasSubscription = $eligiblePlan->fetchColumn() && $subscription->fetchColumn();
             $visitFee = $hasSubscription ? 0 : ($membershipId ? 70 : 100);
             if ($visitFee > 0 && ($_POST['payment_confirmed'] ?? '') !== 'yes') {
                 throw new RuntimeException('Collect the visit fee before checking in this member.');
@@ -151,6 +153,8 @@ $availableMembers = $db->query(
                 AND ms.plan_id <> 3 AND ms.status = 'active' AND ms.start_date <= CURDATE() AND ms.end_date >= CURDATE())
                  THEN CASE WHEN EXISTS (SELECT 1 FROM memberships sub WHERE sub.member_id = m.id
                      AND sub.plan_id = 3 AND sub.status = 'active' AND sub.start_date <= CURDATE() AND sub.end_date >= CURDATE())
+                     AND EXISTS (SELECT 1 FROM memberships eligible WHERE eligible.member_id = m.id
+                     AND eligible.plan_id IN (1, 2) AND eligible.status = 'active' AND eligible.start_date <= CURDATE() AND eligible.end_date >= CURDATE())
                      THEN 0 ELSE 70 END ELSE 100 END AS visit_fee
      FROM members m
      WHERE m.status = 'active'
