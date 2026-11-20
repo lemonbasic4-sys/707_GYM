@@ -23,7 +23,7 @@ Walang demo members sa seeds. Ang reset command sa import guide ay **bubura sa b
 | Regular walk-in | ₱100 bawat pagpasok |
 | 6-month membership | ₱300 membership fee |
 | 1-year membership | ₱500 membership fee |
-| 1-month subscription | ₱1,200 membership fee |
+| 1-month subscription | ₱1,000 membership fee |
 | Visit na may active membership | ₱70 bawat pagpasok |
 
 Ang member na walang current active membership ay **Pending** sa Members page. Sa daily member check-in, kailangang kumpirmahin ang bayad at ilagay ang amount tendered; ipinapakita ang sukli at nai-record ang visit payment. Hiwalay ang Walk-in, Membership, at Daily Member Fee sa Payments page. Nasa **System Settings → CSV Import** ang import tools.

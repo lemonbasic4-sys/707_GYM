@@ -37,7 +37,6 @@ $form = [
     'amount' => $_POST['amount'] ?? ($requestedType === 'walk_in_pass' ? '100' : ''),
     'discount' => $_POST['discount'] ?? '0',
     'payment_method' => $_POST['payment_method'] ?? 'cash',
-    'amount_tendered' => $_POST['amount_tendered'] ?? '',
     'payment_date' => $_POST['payment_date'] ?? date('Y-m-d'),
     'start_date' => $_POST['start_date'] ?? date('Y-m-d'),
     'notes' => trim($_POST['notes'] ?? ''),
@@ -125,11 +124,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($total <= 0) {
             $errors[] = 'Total due must be greater than zero.';
-        }
-
-        $amountTendered = is_numeric($form['amount_tendered']) ? (float)$form['amount_tendered'] : 0.0;
-        if ($amountTendered < $total) {
-            $errors[] = 'Amount tendered must cover the total due.';
         }
 
         if (!$errors) {
@@ -358,20 +352,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div class="payment-total-due"><strong>Total Due:</strong><strong id="totalDisplay"><?= formatPhilippineCurrency($initialTotal) ?></strong></div>
         </div>
 
-        <div class="payment-form-grid">
-            <div class="payment-field">
-                <label for="paymentMethod">Payment Method</label>
-                <select name="payment_method" id="paymentMethod">
-                    <?php foreach ($paymentMethods as $value => $label): ?>
-                    <option value="<?= sanitize($value) ?>" <?= $form['payment_method'] === $value ? 'selected' : '' ?>><?= sanitize($label) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="payment-field">
-                <label for="amountTendered">Amount Tendered (PHP) <span class="required">*</span></label>
-                <input type="number" id="amountTendered" name="amount_tendered" min="0" step="0.01" value="<?= sanitize((string)$form['amount_tendered']) ?>" required>
-                <span class="form-hint">Change: <strong id="changeDisplay">₱0.00</strong></span>
-            </div>
+        <div class="payment-field">
+            <label for="paymentMethod">Payment Method</label>
+            <select name="payment_method" id="paymentMethod">
+                <?php foreach ($paymentMethods as $value => $label): ?>
+                <option value="<?= sanitize($value) ?>" <?= $form['payment_method'] === $value ? 'selected' : '' ?>><?= sanitize($label) ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
 
         <div class="payment-field">
@@ -397,7 +384,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const plan = document.getElementById('planSelect');
     const packagePrice = document.getElementById('packagePrice');
     const discount = document.getElementById('discount');
-    const tendered = document.getElementById('amountTendered');
     const panels = [...form.querySelectorAll('[data-payment-panel]')];
     const labels = [...form.querySelectorAll('[data-payment-step-label]')];
     const back = document.getElementById('paymentWizardBack');
@@ -453,11 +439,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 discount.reportValidity();
                 return false;
             }
-            if (Number(tendered.value) < total) {
-                tendered.setCustomValidity('Amount tendered must cover the total due.');
-                tendered.reportValidity();
-                return false;
-            }
         }
         return true;
     }
@@ -478,19 +459,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const subtotal = isMembership ? Number(selectedPlan.dataset.price || 0) : Number(packagePrice.value || 0);
         const discountAmount = Number(discount.value || 0);
         const total = Math.max(0, subtotal - discountAmount);
-        const change = Math.max(0, Number(tendered.value || 0) - total);
 
         document.getElementById('subtotalDisplay').textContent = money(subtotal);
         document.getElementById('discountDisplay').textContent = '-' + money(discountAmount);
         document.getElementById('totalDisplay').textContent = money(total);
-        document.getElementById('changeDisplay').textContent = money(change);
         document.getElementById('planDurationHint').textContent = isMembership && selectedPlan.dataset.duration
             ? 'Membership duration: ' + selectedPlan.dataset.duration + ' days'
             : '';
     }
 
     form.querySelectorAll('input[name="transaction_type"]').forEach(input => input.addEventListener('change', updateCheckout));
-    [plan, packagePrice, discount, tendered].forEach(input => input.addEventListener('input', updateCheckout));
+    [plan, packagePrice, discount].forEach(input => input.addEventListener('input', updateCheckout));
     plan.addEventListener('change', updateCheckout);
     form.querySelectorAll('input, select').forEach(input => input.addEventListener('input', () => input.setCustomValidity('')));
     next.addEventListener('click', () => { if (validateStep(step)) showStep(step + 1); });

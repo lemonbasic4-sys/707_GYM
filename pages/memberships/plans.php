@@ -59,11 +59,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } elseif ($action === 'delete') {
             $planId = (int)($_POST['plan_id'] ?? 0);
-            // Soft delete: set to inactive
-            $db->prepare("UPDATE membership_plans SET status='inactive' WHERE id=:id")->execute([':id'=>$planId]);
-            logActivity($_SESSION['admin_id'], 'plan.delete', "Plan ID {$planId}");
-            setFlash('success', 'Plan deactivated.');
-            redirect(BASE_URL . '/pages/memberships/plans.php');
+            if ($planId <= 0) {
+                $errors[] = 'Invalid plan.';
+            } else {
+                $linked = $db->prepare("SELECT COUNT(*) FROM memberships WHERE plan_id=:id");
+                $linked->execute([':id'=>$planId]);
+                if ((int)$linked->fetchColumn() > 0) {
+                    $errors[] = 'This plan has membership records and cannot be deleted. Set it to inactive instead.';
+                } else {
+                    $delete = $db->prepare("DELETE FROM membership_plans WHERE id=:id");
+                    $delete->execute([':id'=>$planId]);
+                    if ($delete->rowCount() > 0) {
+                        logActivity($_SESSION['admin_id'], 'plan.delete', "Plan ID {$planId}");
+                        setFlash('success', 'Plan deleted.');
+                        redirect(BASE_URL . '/pages/memberships/plans.php');
+                    }
+                    $errors[] = 'Plan not found.';
+                }
+            }
         }
     }
     rotateCsrfToken();
@@ -117,7 +130,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     onclick="editPlan(<?= htmlspecialchars(json_encode($plan), ENT_QUOTES) ?>)">
                                 <i data-lucide="pencil"></i>
                             </button>
-                            <form method="POST" style="display:inline;" onsubmit="return confirm('Deactivate this plan?')">
+                            <form method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this plan?')">
                                 <?= csrfField() ?>
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="plan_id" value="<?= (int)$plan['id'] ?>">
